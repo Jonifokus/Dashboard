@@ -371,7 +371,7 @@ function DrillDownPanel({drill,onClose,t,onCanvasserClick}){
   return(
     <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:1000,display:"flex",alignItems:"flex-end",background:"rgba(0,0,0,0.65)",backdropFilter:"blur(4px)"}}
       onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxHeight:"82vh",background:t.card,borderRadius:"20px 20px 0 0",border:`1px solid ${t.border}`,overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 -8px 40px rgba(0,0,0,0.5)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxHeight:"82vh",background:t.card,borderRadius:"20px 20px 0 0",border:`1px solid ${t.border}`,overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 -8px 40px rgba(0,0,0,0.5)",fontFamily:"'Segoe UI',system-ui,-apple-system,sans-serif"}}>
         <div style={{padding:"14px 18px 10px",borderBottom:`1px solid ${t.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
           <div style={{width:12,height:12,borderRadius:3,background:drill.color,flexShrink:0}}/>
           <div style={{flex:1}}>
@@ -383,7 +383,7 @@ function DrillDownPanel({drill,onClose,t,onCanvasserClick}){
         <div style={{padding:"8px 18px",borderBottom:`1px solid ${t.border}`,flexShrink:0}}>
           <input placeholder="🔍 Cari canvasser / cluster..." value={search} onChange={e=>{setSearch(e.target.value);setPg(0);}}
             style={{width:"100%",background:t.cardAlt,border:`1px solid ${t.border}`,color:t.text,borderRadius:8,padding:"7px 12px",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
-          <div style={{fontSize:10,color:t.muted,marginTop:4}}>💡 Klik nama untuk lihat detail aktivitas</div>
+          <div style={{fontSize:11,color:t.muted,marginTop:4,fontFamily:"'Segoe UI',system-ui,-apple-system,sans-serif"}}>💡 Klik nama untuk lihat detail aktivitas</div>
         </div>
         <div style={{overflowY:"auto",flex:1}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,fontFamily:"'Segoe UI',system-ui,-apple-system,sans-serif"}}>
@@ -468,7 +468,7 @@ function CanvasserDetailPanel({detail,onClose,t}){
   return(
     <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:1100,display:"flex",alignItems:"flex-end",background:"rgba(0,0,0,0.75)",backdropFilter:"blur(4px)"}}
       onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxHeight:"88vh",background:t.card,borderRadius:"20px 20px 0 0",border:`1px solid ${t.border}`,overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 -8px 40px rgba(0,0,0,0.6)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxHeight:"88vh",background:t.card,borderRadius:"20px 20px 0 0",border:`1px solid ${t.border}`,overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 -8px 40px rgba(0,0,0,0.6)",fontFamily:"'Segoe UI',system-ui,-apple-system,sans-serif"}}>
         <div style={{padding:"14px 18px 10px",borderBottom:`1px solid ${t.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
           <div style={{flex:1}}>
             <div style={{fontWeight:800,fontSize:15,color:t.text}}>👤 {canvasser?.name}</div>
