@@ -374,9 +374,9 @@ function OutletDrillPanel({drill,onClose,t}){
   const list=sorted.slice(pg*PG,(pg+1)*PG);
   const total=drill.rows.reduce((s,r)=>s+r.total,0);
   const COLOR="#06b6d4";
-  const SBtn=({label,key})=>(
-    <button onClick={()=>toggleS(key)} style={{background:sBy===key?COLOR:t.cardAlt,color:sBy===key?"#fff":t.muted,border:"1px solid "+t.border,borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>
-      {label}{sBy===key?(sDir==="desc"?" ↓":" ↑"):""}
+  const SBtn=({label,sk})=>(
+    <button onClick={()=>toggleS(sk)} style={{background:sBy===sk?COLOR:t.cardAlt,color:sBy===sk?"#fff":t.muted,border:"1px solid "+t.border,borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>
+      {label}{sBy===sk?(sDir==="desc"?" ↓":" ↑"):""}
     </button>
   );
   return(
@@ -395,7 +395,7 @@ function OutletDrillPanel({drill,onClose,t}){
             style={{width:"100%",background:t.cardAlt,border:`1px solid ${t.border}`,color:t.text,borderRadius:8,padding:"7px 12px",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
           <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap",alignItems:"center"}}>
             <span style={{fontSize:10,color:t.muted,fontWeight:600}}>Sort:</span>
-            <SBtn label="Total" key2="total"/> <SBtn label="A1" key2="A1"/> <SBtn label="A2" key2="A2"/> <SBtn label="A3" key2="A3"/> <SBtn label="Census" key2="census"/>
+            <SBtn label="Total" sk="total"/> <SBtn label="A1" sk="A1"/> <SBtn label="A2" sk="A2"/> <SBtn label="A3" sk="A3"/> <SBtn label="Census" sk="census"/>
           </div>
         </div>
         <div style={{overflowY:"auto",flex:1}}>
