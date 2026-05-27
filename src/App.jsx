@@ -231,7 +231,7 @@ function processRows(rows) {
     if(as1==="A1 - NORMAL")    canvMap[cid].A1++;
     if(as1==="A2 - ANOMALY")   canvMap[cid].A2++;
     if(as1==="A3 - INCOMPLETE")canvMap[cid].A3++;
-    if(visC[vs]!==undefined)   canvMap[nm][vs]=(canvMap[nm][vs]||0)+1;
+    if(visC[vs]!==undefined)   canvMap[cid][vs]=(canvMap[cid][vs]||0)+1;
     if(!isNaN(durM)){canvMap[cid].durSum+=durM;canvMap[cid].durCnt++;}
     if(!isNaN(disM)){canvMap[cid].disSum+=disM;canvMap[cid].disCnt++;}
     // In Range per canvasser
