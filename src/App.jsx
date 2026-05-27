@@ -231,7 +231,7 @@ function processRows(rows) {
     if(as1==="A1 - NORMAL")    canvMap[cid].A1++;
     if(as1==="A2 - ANOMALY")   canvMap[cid].A2++;
     if(as1==="A3 - INCOMPLETE")canvMap[cid].A3++;
-    if(visC[vs]!==undefined)   canvMap[cid][vs]=(canvMap[cid][vs]||0)+1;
+    if(visC[vs]!==undefined)   canvMap[nm][vs]=(canvMap[nm][vs]||0)+1;
     if(!isNaN(durM)){canvMap[cid].durSum+=durM;canvMap[cid].durCnt++;}
     if(!isNaN(disM)){canvMap[cid].disSum+=disM;canvMap[cid].disCnt++;}
     // In Range per canvasser
@@ -374,9 +374,9 @@ function OutletDrillPanel({drill,onClose,t}){
   const list=sorted.slice(pg*PG,(pg+1)*PG);
   const total=drill.rows.reduce((s,r)=>s+r.total,0);
   const COLOR="#06b6d4";
-  const SBtn=({label,sk})=>(
-    <button onClick={()=>toggleS(sk)} style={{background:sBy===sk?COLOR:t.cardAlt,color:sBy===sk?"#fff":t.muted,border:"1px solid "+t.border,borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>
-      {label}{sBy===sk?(sDir==="desc"?" ↓":" ↑"):""}
+  const SBtn=({label,key})=>(
+    <button onClick={()=>toggleS(key)} style={{background:sBy===key?COLOR:t.cardAlt,color:sBy===key?"#fff":t.muted,border:"1px solid "+t.border,borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>
+      {label}{sBy===key?(sDir==="desc"?" ↓":" ↑"):""}
     </button>
   );
   return(
@@ -395,7 +395,7 @@ function OutletDrillPanel({drill,onClose,t}){
             style={{width:"100%",background:t.cardAlt,border:`1px solid ${t.border}`,color:t.text,borderRadius:8,padding:"7px 12px",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
           <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap",alignItems:"center"}}>
             <span style={{fontSize:10,color:t.muted,fontWeight:600}}>Sort:</span>
-            <SBtn label="Total" sk="total"/> <SBtn label="A1" sk="A1"/> <SBtn label="A2" sk="A2"/> <SBtn label="A3" sk="A3"/> <SBtn label="Census" sk="census"/>
+            <SBtn label="Total" key2="total"/> <SBtn label="A1" key2="A1"/> <SBtn label="A2" key2="A2"/> <SBtn label="A3" key2="A3"/> <SBtn label="Census" key2="census"/>
           </div>
         </div>
         <div style={{overflowY:"auto",flex:1}}>
@@ -877,24 +877,6 @@ function Dashboard({files,onReset,dark,toggleDark}){
   const handleSort=key=>{if(sk===key)setSd(d=>d==="desc"?"asc":"desc");else{setSk(key);setSd("desc");}};
   const mkTip=p=><Tip {...p} t={t}/>;
 
-  const computeOutletDrill=useCallback((outletType)=>{
-    const map={};
-    clusters.forEach(cl=>(cl.rawRows||[]).forEach(r=>{
-      const ot0=String(r["Outlet Type"]||"").trim();
-      const ot=ot0.toUpperCase()==="RO"?"RO OTHER":ot0;
-      if(ot.toUpperCase()!==outletType.toUpperCase())return;
-      const cid=String(r["Canvasser ID"]||r["Canvasser"]||"").trim();
-      const nm=String(r["Canvasser"]||"").trim();
-      const vs=String(r["Visit Status"]||"").toUpperCase();
-      const isCensus=["Y","YES","1","TRUE"].includes(String(r["RO Census"]||"").trim().toUpperCase());
-      if(!map[cid])map[cid]={id:cid,name:nm,region:cl.regionCode||"",cluster:cl.label||"",total:0,A1:0,A2:0,A3:0,census:0,nonCensus:0};
-      map[cid].total++;
-      if(vs==="VALID")map[cid].A1++;else if(vs==="OBSERVE"||vs==="INVESTIGATE")map[cid].A2++;else if(vs==="INCOMPLETE")map[cid].A3++;
-      if(isCensus)map[cid].census++;else map[cid].nonCensus++;
-    }));
-    setOutletDrill({outletType,rows:Object.values(map).sort((a,b)=>b.total-a.total)});
-  },[clusters]);
-
   // ── Open drill-down panel ─────────────────────────────────────────────────
   const openDrill = useCallback((label, color, countKey) => {
     const canvList = view.canvassers
@@ -1320,10 +1302,9 @@ function Dashboard({files,onReset,dark,toggleDark}){
                 <div style={{fontWeight:700,marginBottom:14}}>{title} per Outlet Type</div>
                 <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={view.outletData.map(d=>mi===0
-                    ?{name:d.type.replace("RO ",""),A1:d.A1,A2:d.A2,A3:d.A3,_type:d.type}
+                    ?{name:d.type.replace("RO ",""),A1:d.A1,A2:d.A2,A3:d.A3}
                     :{name:d.type.replace("RO ",""),A1:pct(d.A1,d.total),A2:pct(d.A2,d.total),A3:pct(d.A3,d.total)}
-                  )} margin={{top:10,right:10,bottom:20,left:0}}
-                    onClick={d=>{if(d?.activePayload?.[0]?.payload?._type)computeOutletDrill(d.activePayload[0].payload._type);}}>
+                  )} margin={{top:10,right:10,bottom:20,left:0}}>
                     <CartesianGrid strokeDasharray="3 3" stroke={t.border}/>
                     <XAxis dataKey="name" tick={{fill:t.muted,fontSize:11}}/>
                     <YAxis tick={{fill:t.muted,fontSize:10}} tickFormatter={mi===0?fmtK:v=>v+"%"} unit={mi===1?"%":""} domain={mi===1?[0,100]:undefined}/>
@@ -1346,8 +1327,7 @@ function Dashboard({files,onReset,dark,toggleDark}){
                   <tbody>
                     {view.outletData.map((d,i)=>(
                       <tr key={i} style={{borderBottom:`1px solid ${t.border}`,background:i%2===0?"transparent":t.rowAlt}}>
-                        <td style={{padding:"9px 12px",fontWeight:700,color:P.accent,cursor:"pointer",textDecoration:"underline",textDecorationStyle:"dotted"}}
-                          onClick={()=>computeOutletDrill(d.type)}>{d.type}</td>
+                        <td style={{padding:"9px 12px",fontWeight:700}}>{d.type}</td>
                         <td style={{padding:"9px 12px",fontWeight:600}}>{d.total.toLocaleString()}</td>
                         <td style={{padding:"9px 12px",color:P.a1}}>{(d.A1||0).toLocaleString()}</td>
                         <td style={{padding:"9px 12px",color:P.a2}}>{(d.A2||0).toLocaleString()}</td>
@@ -1580,7 +1560,6 @@ function Dashboard({files,onReset,dark,toggleDark}){
       </div>
       <div style={{textAlign:"center",fontSize:10,color:t.muted,padding:"14px 22px 28px",opacity:0.4}}>XLSMART Analytics · Klik status di chart untuk lihat breakdown canvasser</div>
     </div>
-    <OutletDrillPanel drill={outletDrill} onClose={()=>setOutletDrill(null)} t={t}/>
     <DrillDownPanel drill={drill} onClose={()=>setDrill(null)} t={t}
       onCanvasserClick={(r)=>{
         const rows=getCanvasserRows(r.name,r.cluster,drill.countKey);
