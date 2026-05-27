@@ -1011,15 +1011,16 @@ function Dashboard({files,onReset,dark,toggleDark}){
               <div style={card()}>
                 <div style={{fontWeight:700,marginBottom:12}}>📋 Key Insights</div>
                 {(()=>{
-                  const wA2=[...view.canvassers].filter(c=>c.total>=10).sort((a,b)=>b.a2p-a.a2p)[0];
-                  const wA3=[...view.canvassers].filter(c=>c.total>=10).sort((a,b)=>b.a3p-a.a3p)[0];
-                  const wInv=[...view.canvassers].filter(c=>c.total>=10).sort((a,b)=>b.invP-a.invP)[0];
+                  // Sort by AMOUNT (count) not percentage - more meaningful
+                  const wA2=[...view.canvassers].filter(c=>c.A2>0).sort((a,b)=>b.A2-a.A2)[0];
+                  const wA3=[...view.canvassers].filter(c=>c.A3>0).sort((a,b)=>b.A3-a.A3)[0];
+                  const wInv=[...view.canvassers].filter(c=>c.INVESTIGATE>0).sort((a,b)=>b.INVESTIGATE-a.INVESTIGATE)[0];
                   const topDay=[...(view.trend||[])].sort((a,b)=>b.total-a.total)[0];
                   return[
                     {icon:"✅",color:P.a1,title:"A1 Normal Rate",desc:`${pctS(ac["A1 - NORMAL"],T)} (${(ac["A1 - NORMAL"]||0).toLocaleString()}) aktivitas berjalan normal.`},
-                    {icon:"⚠️",color:P.a2,title:"A2 Anomaly Tertinggi",desc:wA2?`${wA2.name} [${wA2.cluster}]: ${wA2.a2p.toFixed(1)}% dari ${wA2.total} aktivitas`:"–"},
-                    {icon:"🔵",color:P.a3,title:"A3 Incomplete Tertinggi",desc:wA3?`${wA3.name} [${wA3.cluster}]: ${wA3.a3p.toFixed(1)}% (${wA3.A3} aktivitas)`:"–"},
-                    {icon:"🔍",color:P.investigate,title:"Investigate Tertinggi",desc:wInv?`${wInv.name} [${wInv.cluster}]: ${wInv.invP.toFixed(1)}% (${wInv.INVESTIGATE} aktivitas)`:"–"},
+                    {icon:"⚠️",color:P.a2,title:"A2 Anomaly Terbanyak",desc:wA2?`${wA2.name} [${wA2.cluster}]: ${wA2.A2.toLocaleString()} aktivitas (${wA2.a2p.toFixed(1)}% dari totalnya)`:"–"},
+                    {icon:"🔵",color:P.a3,title:"A3 Incomplete Terbanyak",desc:wA3?`${wA3.name} [${wA3.cluster}]: ${wA3.A3.toLocaleString()} aktivitas (${wA3.a3p.toFixed(1)}% dari totalnya)`:"–"},
+                    {icon:"🔍",color:P.investigate,title:"Investigate Terbanyak",desc:wInv?`${wInv.name} [${wInv.cluster}]: ${wInv.INVESTIGATE.toLocaleString()} aktivitas (${wInv.invP.toFixed(1)}% dari totalnya)`:"–"},
                     {icon:"⏱",color:"#f97316",title:"Durasi Singkat (SHORT)",desc:`${(dc["SHORT"]||0).toLocaleString()} aktivitas durasi singkat — perlu verifikasi.`},
                     {icon:"📅",color:"#34d399",title:"Hari Tersibuk",desc:topDay?`${topDay.date}: ${topDay.total.toLocaleString()} aktivitas (A1: ${pctS(topDay.A1,topDay.total)})`:"–"},
                   ].map((f,i)=>(
@@ -1394,6 +1395,15 @@ function Dashboard({files,onReset,dark,toggleDark}){
         {/* ════ CANVASSER ════ */}
         {tab==="canvasser"&&(()=>{
           return(<div>
+            <div style={{display:"flex",gap:8,marginBottom:8,flexWrap:"wrap",alignItems:"center"}}>
+              <span style={{fontSize:11,color:t.muted,fontWeight:600}}>Sort:</span>
+              {[["Jumlah A2","A2"],["% A2","a2p"],["Jumlah A3","A3"],["% A3","a3p"],["Jumlah Inv","INVESTIGATE"],["Total","total"]].map(([label,key])=>(
+                <button key={key} onClick={()=>handleSort(key)}
+                  style={{background:sk===key?P.accent:t.cardAlt,color:sk===key?"#fff":t.muted,border:"1px solid "+t.border,borderRadius:6,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>
+                  {label}{sk===key?(sd==="desc"?" ↓":" ↑"):""}
+                </button>
+              ))}
+            </div>
             <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
               <input placeholder="🔍 Cari nama / cluster..." value={search} onChange={e=>setSearch(e.target.value)}
                 style={{background:t.inputBg,border:`1px solid ${t.border}`,color:t.text,borderRadius:8,padding:"8px 14px",fontSize:12,outline:"none",width:210}}/>
