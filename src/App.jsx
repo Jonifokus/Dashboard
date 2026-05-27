@@ -189,8 +189,10 @@ function processRows(rows) {
       }
     }
     loc=loc.toUpperCase();
-    const ot  = r["Outlet Type"]||"Unknown";
+    const ot0 = String(r["Outlet Type"]||"Unknown").trim();
+    const ot  = ot0.toUpperCase()==="RO"?"RO OTHER":ot0; // bare RO = data quality
     const nm  = r["Canvasser"]||"Unknown";
+    const cid = String(r["Canvasser ID"]||nm).trim(); // unique ID per canvasser
     const cl  = r["Cluster"]||"Unknown";
     const rgn = getRegionCode(cl);
     const dt  = extractDate(r["Planned Visit Date"]);
@@ -223,28 +225,28 @@ function processRows(rows) {
     if(as1==="A2 - ANOMALY")   outMap["__"+ck].A2++;
     if(as1==="A3 - INCOMPLETE")outMap["__"+ck].A3++;
 
-    if(!canvMap[nm]) canvMap[nm]={name:nm,cluster:cl,region:rgn,total:0,A1:0,A2:0,A3:0,VALID:0,OBSERVE:0,INVESTIGATE:0,INCOMPLETE:0,durSum:0,durCnt:0,disSum:0,disCnt:0,
+    if(!canvMap[cid]) canvMap[cid]={id:cid,name:nm,cluster:cl,region:rgn,total:0,A1:0,A2:0,A3:0,VALID:0,OBSERVE:0,INVESTIGATE:0,INCOMPLETE:0,durSum:0,durCnt:0,disSum:0,disCnt:0,
       DUR_NORMAL:0,DUR_SHORT:0,DUR_LONG:0,DIS_NEAR:0,DIS_MID:0,DIS_FAR:0,DIS_INC:0,LOC_MATCH:0,LOC_NOTMATCH:0,LOC_INC:0,IR_YES:0,IR_NO:0};
-    canvMap[nm].total++;
-    if(as1==="A1 - NORMAL")    canvMap[nm].A1++;
-    if(as1==="A2 - ANOMALY")   canvMap[nm].A2++;
-    if(as1==="A3 - INCOMPLETE")canvMap[nm].A3++;
+    canvMap[cid].total++;
+    if(as1==="A1 - NORMAL")    canvMap[cid].A1++;
+    if(as1==="A2 - ANOMALY")   canvMap[cid].A2++;
+    if(as1==="A3 - INCOMPLETE")canvMap[cid].A3++;
     if(visC[vs]!==undefined)   canvMap[nm][vs]=(canvMap[nm][vs]||0)+1;
-    if(!isNaN(durM)){canvMap[nm].durSum+=durM;canvMap[nm].durCnt++;}
-    if(!isNaN(disM)){canvMap[nm].disSum+=disM;canvMap[nm].disCnt++;}
+    if(!isNaN(durM)){canvMap[cid].durSum+=durM;canvMap[cid].durCnt++;}
+    if(!isNaN(disM)){canvMap[cid].disSum+=disM;canvMap[cid].disCnt++;}
     // In Range per canvasser
-    if(r["In Range"]!=null){if(inRKey==="YES")canvMap[nm].IR_YES++;else canvMap[nm].IR_NO++;}
+    if(r["In Range"]!=null){if(inRKey==="YES")canvMap[cid].IR_YES++;else canvMap[cid].IR_NO++;}
     // Duration/Distance/Location per canvasser
-    if(dur==="NORMAL")    canvMap[nm].DUR_NORMAL++;
-    else if(dur==="SHORT")canvMap[nm].DUR_SHORT++;
-    else if(dur==="LONG") canvMap[nm].DUR_LONG++;
-    if(dis==="NEAR")      canvMap[nm].DIS_NEAR++;
-    else if(dis==="MID")  canvMap[nm].DIS_MID++;
-    else if(dis==="FAR")  canvMap[nm].DIS_FAR++;
-    else if(dis==="INCOMPLETE") canvMap[nm].DIS_INC++;
-    if(loc==="MATCH")         canvMap[nm].LOC_MATCH++;
-    else if(loc==="NOT MATCH")canvMap[nm].LOC_NOTMATCH++;
-    else if(loc==="INCOMPLETE")canvMap[nm].LOC_INC++;
+    if(dur==="NORMAL")    canvMap[cid].DUR_NORMAL++;
+    else if(dur==="SHORT")canvMap[cid].DUR_SHORT++;
+    else if(dur==="LONG") canvMap[cid].DUR_LONG++;
+    if(dis==="NEAR")      canvMap[cid].DIS_NEAR++;
+    else if(dis==="MID")  canvMap[cid].DIS_MID++;
+    else if(dis==="FAR")  canvMap[cid].DIS_FAR++;
+    else if(dis==="INCOMPLETE") canvMap[cid].DIS_INC++;
+    if(loc==="MATCH")         canvMap[cid].LOC_MATCH++;
+    else if(loc==="NOT MATCH")canvMap[cid].LOC_NOTMATCH++;
+    else if(loc==="INCOMPLETE")canvMap[cid].LOC_INC++;
 
     if(dt){
       if(!dateMap[dt]) dateMap[dt]={date:dt,total:0,A1:0,A2:0,A3:0};
@@ -299,13 +301,10 @@ function aggregateList(dataList) {
   }));
   const CANV_KEYS=["total","A1","A2","A3","VALID","OBSERVE","INVESTIGATE","INCOMPLETE","durSum","durCnt","disSum","disCnt","DUR_NORMAL","DUR_SHORT","DUR_LONG","DIS_NEAR","DIS_MID","DIS_FAR","DIS_INC","LOC_MATCH","LOC_NOTMATCH","LOC_INC","IR_YES","IR_NO"];
   const cMap={};
-  dataList.forEach(r=>(r.canvassers||[]).forEach(c=>{
-    if(!cMap[c.name])cMap[c.name]={...c};
-    else{
-      if(cMap[c.name].cluster!==c.cluster)cMap[c.name].cluster="Multi";
-      if(cMap[c.name].region!==c.region)  cMap[c.name].region="Multi";
-      CANV_KEYS.forEach(k=>{cMap[c.name][k]=(cMap[c.name][k]||0)+(c[k]||0);});
-    }
+  dataList.forEach(r=>(r.canvassers||[]).forEach(cv=>{
+    const key=cv.id||cv.name; // Canvasser ID as unique key - no more "Multi"
+    if(!cMap[key])cMap[key]={...cv};
+    else CANV_KEYS.forEach(k=>{cMap[key][k]=(cMap[key][k]||0)+(cv[k]||0);});
   }));
   const canvassers=Object.values(cMap).map(c=>({...c,
     avgDur:c.durCnt?+(c.durSum/c.durCnt).toFixed(1):null,
