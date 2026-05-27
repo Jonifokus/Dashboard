@@ -189,10 +189,9 @@ function processRows(rows) {
       }
     }
     loc=loc.toUpperCase();
-    const ot0 = String(r["Outlet Type"]||"Unknown").trim();
-    const ot  = ot0.toUpperCase()==="RO"?"RO OTHER":ot0; // bare RO = data quality
+    const ot  = r["Outlet Type"]||"Unknown";
     const nm  = r["Canvasser"]||"Unknown";
-    const cid = String(r["Canvasser ID"]||nm).trim(); // unique ID per canvasser
+    const cid = String(r["Canvasser ID"]||nm).trim();
     const cl  = r["Cluster"]||"Unknown";
     const rgn = getRegionCode(cl);
     const dt  = extractDate(r["Planned Visit Date"]);
@@ -231,7 +230,7 @@ function processRows(rows) {
     if(as1==="A1 - NORMAL")    canvMap[cid].A1++;
     if(as1==="A2 - ANOMALY")   canvMap[cid].A2++;
     if(as1==="A3 - INCOMPLETE")canvMap[cid].A3++;
-    if(visC[vs]!==undefined)   canvMap[nm][vs]=(canvMap[nm][vs]||0)+1;
+    if(visC[vs]!==undefined)   canvMap[cid][vs]=(canvMap[cid][vs]||0)+1;
     if(!isNaN(durM)){canvMap[cid].durSum+=durM;canvMap[cid].durCnt++;}
     if(!isNaN(disM)){canvMap[cid].disSum+=disM;canvMap[cid].disCnt++;}
     // In Range per canvasser
@@ -301,10 +300,10 @@ function aggregateList(dataList) {
   }));
   const CANV_KEYS=["total","A1","A2","A3","VALID","OBSERVE","INVESTIGATE","INCOMPLETE","durSum","durCnt","disSum","disCnt","DUR_NORMAL","DUR_SHORT","DUR_LONG","DIS_NEAR","DIS_MID","DIS_FAR","DIS_INC","LOC_MATCH","LOC_NOTMATCH","LOC_INC","IR_YES","IR_NO"];
   const cMap={};
-  dataList.forEach(r=>(r.canvassers||[]).forEach(cv=>{
-    const key=cv.id||cv.name; // Canvasser ID as unique key - no more "Multi"
-    if(!cMap[key])cMap[key]={...cv};
-    else CANV_KEYS.forEach(k=>{cMap[key][k]=(cMap[key][k]||0)+(cv[k]||0);});
+  dataList.forEach(r=>(r.canvassers||[]).forEach(c=>{
+    const key=c.id||c.name;
+    if(!cMap[key])cMap[key]={...c};
+    else CANV_KEYS.forEach(k=>{cMap[key][k]=(cMap[key][k]||0)+(c[k]||0);});
   }));
   const canvassers=Object.values(cMap).map(c=>({...c,
     avgDur:c.durCnt?+(c.durSum/c.durCnt).toFixed(1):null,
@@ -364,19 +363,19 @@ function OutletDrillPanel({drill,onClose,t}){
   const [pg,setPg]=useState(0);
   const [sBy,setSBy]=useState("total");
   const [sDir,setSDir]=useState("desc");
-  const [search,setSearch]=useState("");
+  const [srch,setSrch]=useState("");
   const PG=10;
-  if(!drill) return null;
-  const toggleS=(k)=>{if(sBy===k)setSDir(d=>d==="desc"?"asc":"desc");else{setSBy(k);setSDir("desc");setPg(0);}};
-  const sorted=[...drill.rows]
-    .filter(r=>search?r.name.toLowerCase().includes(search.toLowerCase())||(r.cluster||"").toLowerCase().includes(search.toLowerCase()):true)
-    .sort((a,b)=>sDir==="desc"?b[sBy]-a[sBy]:a[sBy]-b[sBy]);
-  const list=sorted.slice(pg*PG,(pg+1)*PG);
-  const total=drill.rows.reduce((s,r)=>s+r.total,0);
   const COLOR="#06b6d4";
-  const SBtn=({label,key})=>(
-    <button onClick={()=>toggleS(key)} style={{background:sBy===key?COLOR:t.cardAlt,color:sBy===key?"#fff":t.muted,border:"1px solid "+t.border,borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>
-      {label}{sBy===key?(sDir==="desc"?" ↓":" ↑"):""}
+  if(!drill) return null;
+  const filt=[...drill.rows]
+    .filter(r=>srch?r.name.toLowerCase().includes(srch.toLowerCase())||(r.cluster||"").toLowerCase().includes(srch.toLowerCase()):true)
+    .sort((a,b)=>sDir==="desc"?b[sBy]-a[sBy]:a[sBy]-b[sBy]);
+  const list=filt.slice(pg*PG,(pg+1)*PG);
+  const total=drill.rows.reduce((s,r)=>s+r.total,0);
+  const sortBtn=(label,sk)=>(
+    <button onClick={()=>{if(sBy===sk)setSDir(d=>d==="desc"?"asc":"desc");else{setSBy(sk);setSDir("desc");setPg(0);}}}
+      style={{background:sBy===sk?COLOR:t.cardAlt,color:sBy===sk?"#fff":t.muted,border:"1px solid "+t.border,borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>
+      {label}{sBy===sk?(sDir==="desc"?" ↓":" ↑"):""}
     </button>
   );
   return(
@@ -391,11 +390,15 @@ function OutletDrillPanel({drill,onClose,t}){
           <button onClick={onClose} style={{background:t.cardAlt,border:`1px solid ${t.border}`,color:t.text,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:13,fontWeight:700}}>✕</button>
         </div>
         <div style={{padding:"8px 18px",borderBottom:`1px solid ${t.border}`,flexShrink:0}}>
-          <input placeholder="🔍 Cari canvasser / cluster..." value={search} onChange={e=>{setSearch(e.target.value);setPg(0);}}
+          <input placeholder="🔍 Cari canvasser..." value={srch} onChange={e=>{setSrch(e.target.value);setPg(0);}}
             style={{width:"100%",background:t.cardAlt,border:`1px solid ${t.border}`,color:t.text,borderRadius:8,padding:"7px 12px",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
           <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap",alignItems:"center"}}>
             <span style={{fontSize:10,color:t.muted,fontWeight:600}}>Sort:</span>
-            <SBtn label="Total" key2="total"/> <SBtn label="A1" key2="A1"/> <SBtn label="A2" key2="A2"/> <SBtn label="A3" key2="A3"/> <SBtn label="Census" key2="census"/>
+            {sortBtn("Total","total")}
+            {sortBtn("A1","A1")}
+            {sortBtn("A2","A2")}
+            {sortBtn("A3","A3")}
+            {sortBtn("Census","census")}
           </div>
         </div>
         <div style={{overflowY:"auto",flex:1}}>
@@ -409,26 +412,22 @@ function OutletDrillPanel({drill,onClose,t}){
             </thead>
             <tbody>
               {list.map((r,i)=>(
-                <tr key={r.id} style={{borderBottom:`1px solid ${t.border}`,background:i%2===0?"transparent":t.rowAlt}}>
+                <tr key={r.id||i} style={{borderBottom:`1px solid ${t.border}`,background:i%2===0?"transparent":t.rowAlt}}>
                   <td style={{padding:"7px 10px",color:t.muted,fontSize:10}}>{pg*PG+i+1}</td>
-                  <td style={{padding:"7px 10px",fontWeight:600,color:t.text,whiteSpace:"nowrap"}}>{r.name}</td>
+                  <td style={{padding:"7px 10px",fontWeight:600,color:t.text}}>{r.name}</td>
                   <td style={{padding:"7px 10px"}}><span style={{background:P.accent+"20",color:P.accent,padding:"1px 7px",borderRadius:6,fontSize:10,fontWeight:700}}>{r.region||"–"}</span></td>
                   <td style={{padding:"7px 10px",color:t.muted,fontSize:11}}>{r.cluster||"–"}</td>
-                  <td style={{padding:"7px 10px",fontWeight:700,color:COLOR}}>{r.total.toLocaleString()}</td>
-                  <td style={{padding:"7px 10px",color:P.a1,fontWeight:600}}>{r.A1.toLocaleString()}</td>
-                  <td style={{padding:"7px 10px",color:r.A2>0?P.a2:t.muted,fontWeight:r.A2>0?600:400}}>{r.A2.toLocaleString()}</td>
-                  <td style={{padding:"7px 10px",color:r.A3>0?P.a3:t.muted,fontWeight:r.A3>0?600:400}}>{r.A3.toLocaleString()}</td>
-                  <td style={{padding:"7px 10px"}}>
-                    {r.census>0?<span style={{background:"#22c55e20",color:"#22c55e",padding:"1px 8px",borderRadius:999,fontSize:10,fontWeight:700}}>{r.census.toLocaleString()}</span>:<span style={{color:t.muted}}>–</span>}
-                  </td>
-                  <td style={{padding:"7px 10px"}}>
-                    {r.nonCensus>0?<span style={{background:"#6366f120",color:"#6366f1",padding:"1px 8px",borderRadius:999,fontSize:10,fontWeight:700}}>{r.nonCensus.toLocaleString()}</span>:<span style={{color:t.muted}}>–</span>}
-                  </td>
+                  <td style={{padding:"7px 10px",fontWeight:700,color:COLOR}}>{r.total}</td>
+                  <td style={{padding:"7px 10px",color:P.a1}}>{r.A1}</td>
+                  <td style={{padding:"7px 10px",color:r.A2>0?P.a2:t.muted}}>{r.A2}</td>
+                  <td style={{padding:"7px 10px",color:r.A3>0?P.a3:t.muted}}>{r.A3}</td>
+                  <td style={{padding:"7px 10px"}}>{r.census>0?<span style={{background:"#22c55e20",color:"#22c55e",padding:"1px 8px",borderRadius:999,fontSize:10,fontWeight:700}}>{r.census}</span>:<span style={{color:t.muted}}>–</span>}</td>
+                  <td style={{padding:"7px 10px"}}>{r.nonCensus>0?<span style={{background:"#6366f120",color:"#6366f1",padding:"1px 8px",borderRadius:999,fontSize:10,fontWeight:700}}>{r.nonCensus}</span>:<span style={{color:t.muted}}>–</span>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <Pagination page={pg} setPage={setPg} total={sorted.length} pageSize={PG} t={t}/>
+          <Pagination page={pg} setPage={setPg} total={filt.length} pageSize={PG} t={t}/>
         </div>
       </div>
     </div>
@@ -877,6 +876,24 @@ function Dashboard({files,onReset,dark,toggleDark}){
   const handleSort=key=>{if(sk===key)setSd(d=>d==="desc"?"asc":"desc");else{setSk(key);setSd("desc");}};
   const mkTip=p=><Tip {...p} t={t}/>;
 
+  // ── Compute outlet drill data ─────────────────────────────────────────────
+  const openOutletDrill=(outletType)=>{
+    const map={};
+    clusters.forEach(cl=>(cl.rawRows||[]).forEach(r=>{
+      const ot=(()=>{const v=String(r["Outlet Type"]||"").trim();return v.toUpperCase()==="RO"?"RO OTHER":v;})();
+      if(ot.toLowerCase()!==outletType.toLowerCase())return;
+      const cid=String(r["Canvasser ID"]||r["Canvasser"]||"").trim();
+      const nm=String(r["Canvasser"]||"").trim();
+      const vs=String(r["Visit Status"]||"").toUpperCase();
+      const isCensus=["Y","YES","1","TRUE"].includes(String(r["RO Census"]||"").trim().toUpperCase());
+      if(!map[cid])map[cid]={id:cid,name:nm,region:cl.regionCode||"",cluster:cl.label||"",total:0,A1:0,A2:0,A3:0,census:0,nonCensus:0};
+      map[cid].total++;
+      if(vs==="VALID")map[cid].A1++;else if(vs==="OBSERVE"||vs==="INVESTIGATE")map[cid].A2++;else if(vs==="INCOMPLETE")map[cid].A3++;
+      if(isCensus)map[cid].census++;else map[cid].nonCensus++;
+    }));
+    setOutletDrill({outletType,rows:Object.values(map).sort((a,b)=>b.total-a.total)});
+  };
+
   // ── Open drill-down panel ─────────────────────────────────────────────────
   const openDrill = useCallback((label, color, countKey) => {
     const canvList = view.canvassers
@@ -1237,7 +1254,8 @@ function Dashboard({files,onReset,dark,toggleDark}){
               <div style={{fontWeight:700,marginBottom:4}}>Volume Aktivitas per Hari</div>
               <div style={{fontSize:11,color:t.muted,marginBottom:14}}>Planned Visit Date · {view.label}</div>
               <ResponsiveContainer width="100%" height={270}>
-                <BarChart data={view.trend.map(d=>({name:d.date.slice(5),A1:d.A1,A2:d.A2,A3:d.A3}))} margin={{top:10,right:10,bottom:20,left:0}}>
+                <BarChart data={view.trend.map(d=>({name:d.date.slice(5),A1:d.A1,A2:d.A2,A3:d.A3}))} margin={{top:10,right:10,bottom:20,left:0}}
+                  onClick={d=>{if(d?.activeLabel)openOutletDrill(d.activeLabel);}}>
                   <CartesianGrid strokeDasharray="3 3" stroke={t.border}/>
                   <XAxis dataKey="name" tick={{fill:t.muted,fontSize:10}}/>
                   <YAxis tick={{fill:t.muted,fontSize:10}} tickFormatter={fmtK}/>
@@ -1327,7 +1345,7 @@ function Dashboard({files,onReset,dark,toggleDark}){
                   <tbody>
                     {view.outletData.map((d,i)=>(
                       <tr key={i} style={{borderBottom:`1px solid ${t.border}`,background:i%2===0?"transparent":t.rowAlt}}>
-                        <td style={{padding:"9px 12px",fontWeight:700}}>{d.type}</td>
+                        <td style={{padding:"9px 12px",fontWeight:700,color:P.accent,cursor:"pointer"}} onClick={()=>openOutletDrill(d.type)}>{d.type}</td>
                         <td style={{padding:"9px 12px",fontWeight:600}}>{d.total.toLocaleString()}</td>
                         <td style={{padding:"9px 12px",color:P.a1}}>{(d.A1||0).toLocaleString()}</td>
                         <td style={{padding:"9px 12px",color:P.a2}}>{(d.A2||0).toLocaleString()}</td>
@@ -1560,6 +1578,7 @@ function Dashboard({files,onReset,dark,toggleDark}){
       </div>
       <div style={{textAlign:"center",fontSize:10,color:t.muted,padding:"14px 22px 28px",opacity:0.4}}>XLSMART Analytics · Klik status di chart untuk lihat breakdown canvasser</div>
     </div>
+    <OutletDrillPanel drill={outletDrill} onClose={()=>setOutletDrill(null)} t={t}/>
     <DrillDownPanel drill={drill} onClose={()=>setDrill(null)} t={t}
       onCanvasserClick={(r)=>{
         const rows=getCanvasserRows(r.name,r.cluster,drill.countKey);
