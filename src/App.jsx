@@ -364,9 +364,14 @@ function Pagination({page,setPage,total,pageSize,t}){
 function DrillDownPanel({drill,onClose,t,onCanvasserClick}){
   const [search,setSearch]=useState("");
   const [pg,setPg]=useState(0);
+  const [sBy,setSBy]=useState("count");
+  const [sDir,setSDir]=useState("desc");
   const PG=10;
   if(!drill) return null;
-  const filt=drill.rows.filter(r=>search?r.name.toLowerCase().includes(search.toLowerCase())||(r.cluster||"").toLowerCase().includes(search.toLowerCase()):true);
+  const toggleS=(k)=>{if(sBy===k)setSDir(d=>d==="desc"?"asc":"desc");else{setSBy(k);setSDir("desc");setPg(0);}};
+  const filt=[...drill.rows]
+    .filter(r=>search?r.name.toLowerCase().includes(search.toLowerCase())||(r.cluster||"").toLowerCase().includes(search.toLowerCase()):true)
+    .sort((a,b)=>{const va=sBy==="pct"?a.count/a.total:a.count;const vb=sBy==="pct"?b.count/b.total:b.count;return sDir==="desc"?vb-va:va-vb;});
   const list=filt.slice(pg*PG,(pg+1)*PG);
   return(
     <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:1000,display:"flex",alignItems:"flex-end",background:"rgba(0,0,0,0.65)",backdropFilter:"blur(4px)"}}
@@ -384,6 +389,16 @@ function DrillDownPanel({drill,onClose,t,onCanvasserClick}){
           <input placeholder="🔍 Cari canvasser / cluster..." value={search} onChange={e=>{setSearch(e.target.value);setPg(0);}}
             style={{width:"100%",background:t.cardAlt,border:`1px solid ${t.border}`,color:t.text,borderRadius:8,padding:"7px 12px",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
           <div style={{fontSize:11,color:t.muted,marginTop:4,fontFamily:"'Segoe UI',system-ui,-apple-system,sans-serif"}}>💡 Klik nama untuk lihat detail aktivitas</div>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginTop:5,flexWrap:"wrap"}}>
+            <span style={{fontSize:10,color:t.muted,fontWeight:600}}>Sort:</span>
+            {[["Jumlah","count"],["% Total","pct"]].map(([label,key])=>(
+              <button key={key} onClick={()=>toggleS(key)}
+                style={{background:sBy===key?drill.color:t.cardAlt,color:sBy===key?"#fff":t.muted,border:"1px solid "+t.border,borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>
+                {label}{sBy===key?(sDir==="desc"?" ↓":" ↑"):""}
+              </button>
+            ))}
+            <span style={{marginLeft:"auto",fontSize:10,color:t.muted}}>{filt.length} canvasser</span>
+          </div>
         </div>
         <div style={{overflowY:"auto",flex:1}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,fontFamily:"'Segoe UI',system-ui,-apple-system,sans-serif"}}>
