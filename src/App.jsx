@@ -461,6 +461,9 @@ function OutletDrillPanel({drill,onClose,t,onDrill}){
   const [srch,setSrch]=useState("");
   const PG=10;
   const COLOR="#06b6d4";
+  // Reset page when outlet type changes
+  const prevType=React.useRef(null);
+  if(drill&&drill.outletType!==prevType.current){prevType.current=drill.outletType;if(pg!==0)setPg(0);}
   if(!drill) return null;
   const filt=[...drill.rows]
     .filter(r=>srch?r.name.toLowerCase().includes(srch.toLowerCase())||(r.cluster||"").toLowerCase().includes(srch.toLowerCase()):true)
