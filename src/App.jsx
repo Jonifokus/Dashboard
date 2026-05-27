@@ -147,6 +147,7 @@ function processRows(rows) {
       }
     }
     const as1 = vs==="VALID"?"A1 - NORMAL":vs==="OBSERVE"||vs==="INVESTIGATE"?"A2 - ANOMALY":vs==="INCOMPLETE"?"A3 - INCOMPLETE":"";
+    r["_CAS1"]=as1; r["_CVS"]=vs; // store for getCanvasserRows & outlet drill
     // Duration Status — read from cell first, then compute from timestamps or raw duration
     let dur = String(r["_DUR"]!=null?r["_DUR"]:r["Duration Status"]!=null?r["Duration Status"]:"").trim().toUpperCase();
     if(!["NORMAL","SHORT","LONG"].includes(dur)){
@@ -358,33 +359,34 @@ function Pagination({page,setPage,total,pageSize,t}){
   );
 }
 
-// ── OUTLET ACTIVITY PANEL ────────────────────────────────────────────────────
+// ── OUTLET ACTIVITY PANEL ─────────────────────────────────────────────────────
 function OutletActivityPanel({detail,onClose,t}){
   const [pg,setPg]=useState(0);
   const PG=10;
   if(!detail) return null;
   const {outletId,outletName,status,rows}=detail;
-  const statusColor=status==="A1"?P.a1:status==="A2"?P.a2:status==="A3"?P.a3:"#888";
+  const SC=status==="A1"?P.a1:status==="A2"?P.a2:status==="A3"?P.a3:"#06b6d4";
+  const LABEL=status==="A1"?"A1 - Normal":status==="A2"?"A2 - Anomaly":status==="A3"?"A3 - Incomplete":"Semua Aktivitas";
   const fmtDate=v=>{if(!v)return"–";const d=new Date(v);return isNaN(d)?"–":d.toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"2-digit"});};
   const fmtDist=v=>{const n=parseFloat(v);return isNaN(n)?"–":n>=1000?(n/1000).toFixed(1)+"km":n.toFixed(0)+"m";};
   const fmtDur=v=>{const n=parseFloat(v);if(isNaN(n))return"–";if(n>=60)return(n/60).toFixed(1)+"j";if(n>=1)return n.toFixed(1)+"mnt";return Math.round(n*60)+"det";};
-  const vsColor=vs=>{const u=String(vs||"").toUpperCase();return u==="VALID"?P.valid:u==="OBSERVE"?P.observe:u==="INVESTIGATE"?P.investigate:u==="INCOMPLETE"?P.incomplete:"#888";};
+  const vsColor=v=>{const u=String(v||"").toUpperCase();return u==="VALID"?P.valid:u==="OBSERVE"?P.observe:u==="INVESTIGATE"?P.investigate:P.incomplete;};
   const getReason=r=>{
     const vs=String(r["_VS"]||r["Visit Status"]||"").toUpperCase();
-    const distIn=parseFloat(r["Distance Check In (Meter)"])||0;
-    const distOut=parseFloat(r["Distance Check Out (Meter)"])||0;
+    const dIn=parseFloat(r["Distance Check In (Meter)"])||0;
+    const dOt=parseFloat(r["Distance Check Out (Meter)"])||0;
     const dur=parseFloat(r["Visit Duration (Menit)"]);
-    const durSt=String(r["Duration Status"]||r["_DUR"]||"").toUpperCase();
-    const loc=String(r["Location Status"]||r["_LOC"]||"").toUpperCase();
+    const durSt=String(r["_DUR"]||r["Duration Status"]||"").toUpperCase();
+    const loc=String(r["_LOC"]||r["Location Status"]||"").toUpperCase();
     const inR=String(r["In Range"]||"").toLowerCase();
     if(vs==="INCOMPLETE")return"❌ Checkout tidak ada";
     const f=[];
     if(durSt==="SHORT"||(!isNaN(dur)&&dur>0&&dur<3))f.push("⏱ Durasi singkat ("+fmtDur(dur)+")");
     else if(durSt==="LONG"||(!isNaN(dur)&&dur>60))f.push("⏱ Durasi panjang ("+fmtDur(dur)+")");
-    if(distIn>5000)f.push("🚨 Check-in sangat jauh ("+fmtDist(distIn)+")");
-    else if(distOut>5000)f.push("🚨 Check-out sangat jauh ("+fmtDist(distOut)+")");
-    else if(distIn>500)f.push("📍 Check-in jauh ("+fmtDist(distIn)+")");
-    else if(distOut>500)f.push("📍 Check-out jauh ("+fmtDist(distOut)+")");
+    if(dIn>5000)f.push("🚨 Check-in sangat jauh ("+fmtDist(dIn)+")");
+    else if(dOt>5000)f.push("🚨 Check-out sangat jauh ("+fmtDist(dOt)+")");
+    else if(dIn>500)f.push("📍 Check-in jauh ("+fmtDist(dIn)+")");
+    else if(dOt>500)f.push("📍 Check-out jauh ("+fmtDist(dOt)+")");
     if(loc==="NOT MATCH")f.push("📌 Lokasi tidak match");
     if(inR==="no"||inR==="n")f.push("🎯 Out of range");
     return f.length>0?f.join(" · "):"✅ Normal";
@@ -398,7 +400,7 @@ function OutletActivityPanel({detail,onClose,t}){
             <div style={{fontWeight:800,fontSize:15,color:t.text}}>🏪 {outletName}</div>
             <div style={{fontSize:11,color:t.muted,marginTop:3,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
               <span style={{color:t.muted,fontSize:10}}>ID: {outletId}</span>
-              <span style={{background:statusColor+"20",color:statusColor,padding:"2px 10px",borderRadius:999,fontSize:10,fontWeight:700}}>{status==="A1"?"A1 - Normal":status==="A2"?"A2 - Anomaly":"A3 - Incomplete"}</span>
+              <span style={{background:SC+"20",color:SC,padding:"2px 10px",borderRadius:999,fontSize:10,fontWeight:700}}>{LABEL}</span>
               <span style={{color:t.muted}}>· {rows.length} aktivitas</span>
             </div>
           </div>
@@ -408,7 +410,7 @@ function OutletActivityPanel({detail,onClose,t}){
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,fontFamily:"'Segoe UI',system-ui,sans-serif"}}>
             <thead style={{position:"sticky",top:0,background:t.card,zIndex:1}}>
               <tr style={{background:t.cardAlt}}>
-                {["#","Tanggal","Canvasser","Status","In Range","Jarak ke Outlet*","Durasi","Alasan"].map(h=>(
+                {["#","Tanggal","Canvasser","Status","In Range","Jarak*","Durasi","Alasan"].map(h=>(
                   <th key={h} style={{padding:"9px 12px",textAlign:"left",fontSize:11,fontWeight:700,color:t.muted,whiteSpace:"nowrap",borderBottom:`1px solid ${t.border}`}}>{h}</th>
                 ))}
               </tr>
@@ -428,10 +430,12 @@ function OutletActivityPanel({detail,onClose,t}){
                   <td style={{padding:"7px 10px",fontWeight:600,color:t.text,whiteSpace:"nowrap"}}>{r["Canvasser"]||"–"}</td>
                   <td style={{padding:"7px 10px"}}><span style={{background:vc+"20",color:vc,padding:"2px 8px",borderRadius:999,fontSize:10,fontWeight:700}}>{vs||"–"}</span></td>
                   <td style={{padding:"7px 10px"}}>
-                    {r["In Range"]!=null?<span style={{background:isIn?P.a1+"22":P.investigate+"22",color:isIn?P.a1:P.investigate,padding:"2px 8px",borderRadius:999,fontSize:10,fontWeight:700}}>{isIn?"✓ In":"✗ Out"}</span>:<span style={{color:t.muted}}>–</span>}
+                    {r["In Range"]!=null
+                      ?<span style={{background:isIn?P.a1+"22":P.investigate+"22",color:isIn?P.a1:P.investigate,padding:"2px 8px",borderRadius:999,fontSize:10,fontWeight:700}}>{isIn?"✓ In":"✗ Out"}</span>
+                      :<span style={{color:t.muted}}>–</span>}
                   </td>
                   <td style={{padding:"7px 10px",color:dist>500?P.investigate:dist>100?P.observe:t.muted,fontWeight:dist>500?700:400}}>{fmtDist(r["Distance Check In (Meter)"])}</td>
-                  <td style={{padding:"7px 10px",color:!isNaN(dur)&&dur>0&&dur<3?P.short:t.muted,fontWeight:!isNaN(dur)&&dur>0&&dur<3?700:400}}>
+                  <td style={{padding:"7px 10px",color:!isNaN(dur)&&dur>0&&dur<3?P.short:t.muted}}>
                     {fmtDur(r["Visit Duration (Menit)"])}{!isNaN(dur)&&dur>0&&dur<1&&<span style={{fontSize:9,color:P.investigate,marginLeft:3}}>⚡</span>}
                   </td>
                   <td style={{padding:"7px 10px",fontSize:11,color:t.muted}}>{getReason(r)}</td>
@@ -440,8 +444,8 @@ function OutletActivityPanel({detail,onClose,t}){
             </tbody>
           </table>
           <Pagination page={pg} setPage={setPg} total={rows.length} pageSize={PG} t={t}/>
-          <div style={{padding:"8px 16px",borderTop:`1px solid ${t.border}`,fontSize:11,color:t.muted,background:t.cardAlt}}>
-            * Jarak ke Outlet = selisih GPS HP canvasser vs koordinat outlet terdaftar saat check-in
+          <div style={{padding:"8px 16px",fontSize:10,color:t.muted,background:t.cardAlt,borderTop:`1px solid ${t.border}`}}>
+            * Jarak = selisih GPS canvasser vs koordinat outlet terdaftar
           </div>
         </div>
       </div>
@@ -508,15 +512,23 @@ function OutletDrillPanel({drill,onClose,t,onDrill}){
                   <td style={{padding:"7px 10px",color:t.muted,fontSize:10,whiteSpace:"nowrap"}}>{r.id||"–"}</td>
                   <td style={{padding:"7px 10px",fontWeight:600,color:t.text,maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</td>
                   <td style={{padding:"7px 10px",color:t.muted,fontSize:11,whiteSpace:"nowrap"}}>{r.cluster||"–"}</td>
-                  <td style={{padding:"7px 10px",fontWeight:700,color:COLOR}}>{r.total}</td>
                   <td style={{padding:"7px 10px"}}>
-                    {r.A1>0?<span onClick={()=>onDrill(r,"A1")} style={{color:P.a1,fontWeight:700,cursor:"pointer",textDecoration:"underline",textDecorationStyle:"dotted"}}>{r.A1}</span>:<span style={{color:t.muted}}>0</span>}
+                    <span onClick={()=>onDrill&&onDrill(r,"ALL")} style={{color:COLOR,fontWeight:700,cursor:"pointer",borderBottom:"1px dotted "+COLOR}}>{r.total}</span>
                   </td>
                   <td style={{padding:"7px 10px"}}>
-                    {r.A2>0?<span onClick={()=>onDrill(r,"A2")} style={{color:P.a2,fontWeight:700,cursor:"pointer",textDecoration:"underline",textDecorationStyle:"dotted"}}>{r.A2}</span>:<span style={{color:t.muted}}>0</span>}
+                    {r.A1>0
+                      ?<span onClick={()=>onDrill&&onDrill(r,"A1")} style={{color:P.a1,fontWeight:700,cursor:"pointer",borderBottom:"1px dotted "+P.a1}}>{r.A1}</span>
+                      :<span style={{color:t.muted}}>0</span>}
                   </td>
                   <td style={{padding:"7px 10px"}}>
-                    {r.A3>0?<span onClick={()=>onDrill(r,"A3")} style={{color:P.a3,fontWeight:700,cursor:"pointer",textDecoration:"underline",textDecorationStyle:"dotted"}}>{r.A3}</span>:<span style={{color:t.muted}}>0</span>}
+                    {r.A2>0
+                      ?<span onClick={()=>onDrill&&onDrill(r,"A2")} style={{color:P.a2,fontWeight:700,cursor:"pointer",borderBottom:"1px dotted "+P.a2}}>{r.A2}</span>
+                      :<span style={{color:t.muted}}>0</span>}
+                  </td>
+                  <td style={{padding:"7px 10px"}}>
+                    {r.A3>0
+                      ?<span onClick={()=>onDrill&&onDrill(r,"A3")} style={{color:P.a3,fontWeight:700,cursor:"pointer",borderBottom:"1px dotted "+P.a3}}>{r.A3}</span>
+                      :<span style={{color:t.muted}}>0</span>}
                   </td>
                   <td style={{padding:"7px 10px"}}>{r.census>0?<span style={{background:"#22c55e20",color:"#22c55e",padding:"1px 8px",borderRadius:999,fontSize:10,fontWeight:700}}>{r.census}</span>:<span style={{color:t.muted}}>–</span>}</td>
                   <td style={{padding:"7px 10px"}}>{r.nonCensus>0?<span style={{background:"#6366f120",color:"#6366f1",padding:"1px 8px",borderRadius:999,fontSize:10,fontWeight:700}}>{r.nonCensus}</span>:<span style={{color:t.muted}}>–</span>}</td>
@@ -975,28 +987,44 @@ function Dashboard({files,onReset,dark,toggleDark}){
   const handleSort=key=>{if(sk===key)setSd(d=>d==="desc"?"asc":"desc");else{setSk(key);setSd("desc");}};
   const mkTip=p=><Tip {...p} t={t}/>;
 
+  const handleOutletActivity=(row,status)=>{
+    if(!outletDrill||!outletDrill.rawByOutlet)return;
+    const rawRows=outletDrill.rawByOutlet[row.id]||[];
+    const filtered=status==="ALL"?rawRows:rawRows.filter(r=>{
+      const ca=r["_CAS1"]||"";
+      if(status==="A1")return ca==="A1 - NORMAL";
+      if(status==="A2")return ca==="A2 - ANOMALY";
+      if(status==="A3")return ca==="A3 - INCOMPLETE";
+      return true;
+    });
+    setOutletActivity({outletId:row.id,outletName:row.name,status,rows:filtered});
+  };
+
   // ── Compute outlet drill data ─────────────────────────────────────────────
   const openOutletDrill=(outletType)=>{
     const map={};
-    const rawByOutlet={}; // store raw rows per outlet for drill-through
+    const rawByOutlet={};
     clusters.forEach(cl=>(cl.rawRows||[]).forEach(r=>{
       const ot=(()=>{const v=String(r["Outlet Type"]||"").trim();return v.toUpperCase()==="RO"?"RO OTHER":v;})();
       if(ot.toLowerCase()!==outletType.toLowerCase())return;
-      const vs=String(r["_VS"]||r["Visit Status"]||"").toUpperCase();
-      const as1=vs==="VALID"?"A1":vs==="OBSERVE"||vs==="INVESTIGATE"?"A2":vs==="INCOMPLETE"?"A3":"";
+      // Use _VS (direct cell read) for accurate Visit Status
+      const cvs=r["_CVS"]||String(r["_VS"]||r["Visit Status"]||"").toUpperCase();
+      const as1=r["_CAS1"]==="A1 - NORMAL"?"A1":r["_CAS1"]==="A2 - ANOMALY"?"A2":r["_CAS1"]==="A3 - INCOMPLETE"?"A3":"";
       const outId=String(r["Outlet ID"]||r["Outlet"]||"").trim();
       const outNm=String(r["Outlet"]||outId).trim();
+      const cid=String(r["Canvasser ID"]||r["Canvasser"]||"").trim();
       const cnm=String(r["Canvasser"]||"").trim();
       const isCensus=["Y","YES","1","TRUE"].includes(String(r["RO Census"]||"").trim().toUpperCase());
+      // Group by Outlet ID
       if(!map[outId])map[outId]={id:outId,name:outNm,cluster:cl.label||"",region:cl.regionCode||"",total:0,A1:0,A2:0,A3:0,census:0,nonCensus:0,canvassers:new Set()};
       map[outId].total++;
       if(as1==="A1")map[outId].A1++;else if(as1==="A2")map[outId].A2++;else if(as1==="A3")map[outId].A3++;
       if(isCensus)map[outId].census++;else map[outId].nonCensus++;
       map[outId].canvassers.add(cnm);
-      // Store raw row for drill-through
       if(!rawByOutlet[outId])rawByOutlet[outId]=[];
       rawByOutlet[outId].push(r);
     }));
+    // Convert Set to count + list
     const rows=Object.values(map).map(d=>({...d,canvasserList:[...d.canvassers].join(", "),canvasserCount:d.canvassers.size,canvassers:undefined}));
     setOutletDrill({outletType,rows:rows.sort((a,b)=>b.total-a.total),rawByOutlet});
   };
@@ -1016,7 +1044,8 @@ function Dashboard({files,onReset,dark,toggleDark}){
     if(!cl||!cl.rawRows) return [];
     const all = cl.rawRows.filter(r=>r["Canvasser"]===canvasserName);
     const ff = (r) => {
-      const vs=String(r["Visit Status"]||"").toUpperCase();
+      const as1=r["_CAS1"]||""; // pre-computed in processRows
+      const vs=r["_CVS"]||String(r["_VS"]||r["Visit Status"]||"").toUpperCase();
       const dur=parseFloat(r["Visit Duration (Menit)"]);
       const dIn=parseFloat(r["Distance Check In (Meter)"])||0;
       const dOt=parseFloat(r["Distance Check Out (Meter)"])||0;
@@ -1025,9 +1054,9 @@ function Dashboard({files,onReset,dark,toggleDark}){
       const durSt=String(r["Duration Status"]||r["_DUR"]||"").toUpperCase();
       const disSt=String(r["Distance Status"]||r["_DIS"]||"").toUpperCase();
       switch(drillKey){
-        case "A1": return vs==="VALID";
-        case "A2": return vs==="OBSERVE"||vs==="INVESTIGATE";
-        case "A3": return vs==="INCOMPLETE";
+        case "A1": return as1==="A1 - NORMAL";
+        case "A2": return as1==="A2 - ANOMALY";
+        case "A3": return as1==="A3 - INCOMPLETE";
         case "VALID": return vs==="VALID";
         case "OBSERVE": return vs==="OBSERVE";
         case "INVESTIGATE": return vs==="INVESTIGATE";
@@ -1361,8 +1390,7 @@ function Dashboard({files,onReset,dark,toggleDark}){
               <div style={{fontWeight:700,marginBottom:4}}>Volume Aktivitas per Hari</div>
               <div style={{fontSize:11,color:t.muted,marginBottom:14}}>Planned Visit Date · {view.label}</div>
               <ResponsiveContainer width="100%" height={270}>
-                <BarChart data={view.trend.map(d=>({name:d.date.slice(5),A1:d.A1,A2:d.A2,A3:d.A3}))} margin={{top:10,right:10,bottom:20,left:0}}
-                  onClick={d=>{if(d?.activeLabel)openOutletDrill(d.activeLabel);}}>
+                <BarChart data={view.trend.map(d=>({name:d.date.slice(5),A1:d.A1,A2:d.A2,A3:d.A3}))} margin={{top:10,right:10,bottom:20,left:0}}>
                   <CartesianGrid strokeDasharray="3 3" stroke={t.border}/>
                   <XAxis dataKey="name" tick={{fill:t.muted,fontSize:10}}/>
                   <YAxis tick={{fill:t.muted,fontSize:10}} tickFormatter={fmtK}/>
@@ -1427,9 +1455,10 @@ function Dashboard({files,onReset,dark,toggleDark}){
                 <div style={{fontWeight:700,marginBottom:14}}>{title} per Outlet Type</div>
                 <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={view.outletData.map(d=>mi===0
-                    ?{name:d.type.replace("RO ",""),A1:d.A1,A2:d.A2,A3:d.A3}
-                    :{name:d.type.replace("RO ",""),A1:pct(d.A1,d.total),A2:pct(d.A2,d.total),A3:pct(d.A3,d.total)}
-                  )} margin={{top:10,right:10,bottom:20,left:0}}>
+                    ?{name:d.type.replace("RO ",""),A1:d.A1,A2:d.A2,A3:d.A3,_type:d.type}
+                    :{name:d.type.replace("RO ",""),A1:pct(d.A1,d.total),A2:pct(d.A2,d.total),A3:pct(d.A3,d.total),_type:d.type}
+                  )} margin={{top:10,right:10,bottom:20,left:0}}
+                  onClick={d=>{if(d?.activePayload?.[0]?.payload?._type)openOutletDrill(d.activePayload[0].payload._type);}}>
                     <CartesianGrid strokeDasharray="3 3" stroke={t.border}/>
                     <XAxis dataKey="name" tick={{fill:t.muted,fontSize:11}}/>
                     <YAxis tick={{fill:t.muted,fontSize:10}} tickFormatter={mi===0?fmtK:v=>v+"%"} unit={mi===1?"%":""} domain={mi===1?[0,100]:undefined}/>
@@ -1685,17 +1714,7 @@ function Dashboard({files,onReset,dark,toggleDark}){
       </div>
       <div style={{textAlign:"center",fontSize:10,color:t.muted,padding:"14px 22px 28px",opacity:0.4}}>XLSMART Analytics · Klik status di chart untuk lihat breakdown canvasser</div>
     </div>
-    <OutletDrillPanel drill={outletDrill} onClose={()=>setOutletDrill(null)} t={t}
-      onDrill={(row,status)=>{
-        const rows=(outletDrill.rawByOutlet[row.id]||[]).filter(r=>{
-          const vs=String(r["_VS"]||r["Visit Status"]||"").toUpperCase();
-          if(status==="A1")return vs==="VALID";
-          if(status==="A2")return vs==="OBSERVE"||vs==="INVESTIGATE";
-          if(status==="A3")return vs==="INCOMPLETE";
-          return true;
-        });
-        setOutletActivity({outletId:row.id,outletName:row.name,status,rows});
-      }}/>
+    <OutletDrillPanel drill={outletDrill} onClose={()=>setOutletDrill(null)} t={t} onDrill={handleOutletActivity}/>
     <OutletActivityPanel detail={outletActivity} onClose={()=>setOutletActivity(null)} t={t}/>
     <DrillDownPanel drill={drill} onClose={()=>setDrill(null)} t={t}
       onCanvasserClick={(r)=>{
