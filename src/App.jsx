@@ -1385,8 +1385,7 @@ function Dashboard({files,onReset,dark,toggleDark}){
               <div style={{fontWeight:700,marginBottom:4}}>Volume Aktivitas per Hari</div>
               <div style={{fontSize:11,color:t.muted,marginBottom:14}}>Planned Visit Date · {view.label}</div>
               <ResponsiveContainer width="100%" height={270}>
-                <BarChart data={view.trend.map(d=>({name:d.date.slice(5),A1:d.A1,A2:d.A2,A3:d.A3}))} margin={{top:10,right:10,bottom:20,left:0}}
-                  onClick={d=>{if(d?.activeLabel)openOutletDrill(d.activeLabel);}}>
+                <BarChart data={view.trend.map(d=>({name:d.date.slice(5),A1:d.A1,A2:d.A2,A3:d.A3}))} margin={{top:10,right:10,bottom:20,left:0}}>
                   <CartesianGrid strokeDasharray="3 3" stroke={t.border}/>
                   <XAxis dataKey="name" tick={{fill:t.muted,fontSize:10}}/>
                   <YAxis tick={{fill:t.muted,fontSize:10}} tickFormatter={fmtK}/>
@@ -1451,9 +1450,10 @@ function Dashboard({files,onReset,dark,toggleDark}){
                 <div style={{fontWeight:700,marginBottom:14}}>{title} per Outlet Type</div>
                 <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={view.outletData.map(d=>mi===0
-                    ?{name:d.type.replace("RO ",""),A1:d.A1,A2:d.A2,A3:d.A3}
-                    :{name:d.type.replace("RO ",""),A1:pct(d.A1,d.total),A2:pct(d.A2,d.total),A3:pct(d.A3,d.total)}
-                  )} margin={{top:10,right:10,bottom:20,left:0}}>
+                    ?{name:d.type.replace("RO ",""),A1:d.A1,A2:d.A2,A3:d.A3,_type:d.type}
+                    :{name:d.type.replace("RO ",""),A1:pct(d.A1,d.total),A2:pct(d.A2,d.total),A3:pct(d.A3,d.total),_type:d.type}
+                  )} margin={{top:10,right:10,bottom:20,left:0}}
+                  onClick={d=>{if(d?.activePayload?.[0]?.payload?._type)openOutletDrill(d.activePayload[0].payload._type);}}>
                     <CartesianGrid strokeDasharray="3 3" stroke={t.border}/>
                     <XAxis dataKey="name" tick={{fill:t.muted,fontSize:11}}/>
                     <YAxis tick={{fill:t.muted,fontSize:10}} tickFormatter={mi===0?fmtK:v=>v+"%"} unit={mi===1?"%":""} domain={mi===1?[0,100]:undefined}/>
