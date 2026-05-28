@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line } from "recharts";
@@ -461,9 +461,8 @@ function OutletDrillPanel({drill,onClose,t,onDrill}){
   const [srch,setSrch]=useState("");
   const PG=10;
   const COLOR="#06b6d4";
-  // Reset page when outlet type changes
-  const prevType=useRef(null);
-  if(drill&&drill.outletType!==prevType.current){prevType.current=drill.outletType;if(pg!==0)setPg(0);}
+  // Reset page + search when outlet type changes (useEffect = correct hooks pattern)
+  useEffect(()=>{setPg(0);setSrch("");setSBy("total");setSDir("desc");},[drill?.outletType]);
   if(!drill) return null;
   const filt=[...drill.rows]
     .filter(r=>srch?r.name.toLowerCase().includes(srch.toLowerCase())||(r.cluster||"").toLowerCase().includes(srch.toLowerCase()):true)
