@@ -633,9 +633,13 @@ function DrillDownPanel({drill,onClose,t,onCanvasserClick}){
 // ── CANVASSER DETAIL PANEL ────────────────────────────────────────────────────
 function CanvasserDetailPanel({detail,onClose,t}){
   const [pg,setPg]=useState(0);
+  const [view,setView]=useState("list");
+  const [oPg,setOPg]=useState(0);
   const PG=10;
+  useEffect(()=>{setPg(0);setOPg(0);setView("list");},[detail?.canvasser?.id]);
   if(!detail) return null;
   const {canvasser,drillLabel,color,rows}=detail;
+  const allRows=rows._all||rows;
   const fmtDate=v=>{if(!v)return"–";const d=new Date(v);return isNaN(d)?"–":d.toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"2-digit"});};
   const fmtDist=v=>{const n=parseFloat(v);return isNaN(n)?"–":n>=1000?(n/1000).toFixed(1)+"km":n.toFixed(0)+"m";};
   const fmtDur=v=>{const n=parseFloat(v);if(isNaN(n))return"–";if(n>=60)return(n/60).toFixed(1)+"j";if(n>=1)return n.toFixed(1)+"mnt";return Math.round(n*60)+"det";};
@@ -665,6 +669,18 @@ function CanvasserDetailPanel({detail,onClose,t}){
     return f.length>0 ? f.join(" · ") : (vs==="VALID"?"✅ Normal":"❓ "+vs);
   };
   const sorted=rows||[];
+  const outletMap={};
+  (allRows||[]).forEach(r=>{
+    const oid=String(r["Outlet ID"]||r["Outlet"]||"").trim();
+    const onm=String(r["Outlet"]||oid).trim();
+    const as1=r["_CAS1"]||"";
+    if(!outletMap[oid])outletMap[oid]={id:oid,name:onm,total:0,A1:0,A2:0,A3:0};
+    outletMap[oid].total++;
+    if(as1==="A1 - NORMAL")outletMap[oid].A1++;
+    else if(as1==="A2 - ANOMALY")outletMap[oid].A2++;
+    else if(as1==="A3 - INCOMPLETE")outletMap[oid].A3++;
+  });
+  const outletRows=Object.values(outletMap).sort((a,b)=>b.total-a.total);
 
   return(
     <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:1100,display:"flex",alignItems:"flex-end",background:"rgba(0,0,0,0.75)",backdropFilter:"blur(4px)"}}
@@ -679,10 +695,39 @@ function CanvasserDetailPanel({detail,onClose,t}){
               <span style={{background:color+"20",color,padding:"2px 10px",borderRadius:999,fontSize:10,fontWeight:700}}>· {drillLabel}</span>
               <span style={{color:t.muted}}>· {sorted.length} aktivitas sesuai filter</span>
             </div>
+            <div style={{display:"flex",gap:4,marginTop:6}}>
+              <button onClick={()=>setView("list")} style={{background:view==="list"?color:t.cardAlt,color:view==="list"?"#fff":t.muted,border:"1px solid "+t.border,borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>📋 Aktivitas ({sorted.length})</button>
+              <button onClick={()=>setView("outlet")} style={{background:view==="outlet"?color:t.cardAlt,color:view==="outlet"?"#fff":t.muted,border:"1px solid "+t.border,borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer"}}>🏪 Per Outlet ({outletRows.length})</button>
+            </div>
           </div>
           <button onClick={onClose} style={{background:t.cardAlt,border:`1px solid ${t.border}`,color:t.text,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:13,fontWeight:700}}>✕</button>
         </div>
         <div style={{overflowY:"auto",flex:1}}>
+          {view==="outlet"?(<>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,fontFamily:"'Segoe UI',system-ui,sans-serif"}}>
+              <thead style={{position:"sticky",top:0,background:t.card,zIndex:1}}>
+                <tr style={{background:t.cardAlt}}>
+                  {["#","Outlet ID","Outlet","Total","A1","A2","A3"].map(h=>(
+                    <th key={h} style={{padding:"9px 12px",textAlign:"left",fontSize:11,fontWeight:700,color:t.muted,whiteSpace:"nowrap",borderBottom:`1px solid ${t.border}`}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {outletRows.slice(oPg*PG,(oPg+1)*PG).map((r,i)=>(
+                  <tr key={r.id||i} style={{borderBottom:`1px solid ${t.border}`,background:i%2===0?"transparent":t.rowAlt}}>
+                    <td style={{padding:"7px 10px",color:t.muted,fontSize:10}}>{oPg*PG+i+1}</td>
+                    <td style={{padding:"7px 10px",color:t.muted,fontSize:10,whiteSpace:"nowrap"}}>{r.id||"–"}</td>
+                    <td style={{padding:"7px 10px",fontWeight:600,color:t.text,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</td>
+                    <td style={{padding:"7px 10px",fontWeight:800,color:t.text}}>{r.total}</td>
+                    <td style={{padding:"7px 10px",color:r.A1>0?P.a1:t.muted,fontWeight:r.A1>0?700:400}}>{r.A1}</td>
+                    <td style={{padding:"7px 10px",color:r.A2>0?P.a2:t.muted,fontWeight:r.A2>0?700:400}}>{r.A2}</td>
+                    <td style={{padding:"7px 10px",color:r.A3>0?P.a3:t.muted,fontWeight:r.A3>0?700:400}}>{r.A3}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination page={oPg} setPage={setOPg} total={outletRows.length} pageSize={PG} t={t}/>
+          </>):(<>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,fontFamily:"'Segoe UI',system-ui,-apple-system,sans-serif"}}>
             <thead style={{position:"sticky",top:0,background:t.card,zIndex:1}}>
               <tr style={{background:t.cardAlt}}>
@@ -723,6 +768,7 @@ function CanvasserDetailPanel({detail,onClose,t}){
             </tbody>
           </table>
           <Pagination page={pg} setPage={setPg} total={sorted.length} pageSize={PG} t={t}/>
+          </>)}
           {/* Footnote - always visible */}
           <div style={{padding:"10px 16px",borderTop:`1px solid ${t.border}`,fontSize:11,color:t.muted,lineHeight:1.7,background:t.cardAlt}}>
             <b>* Jarak ke Outlet</b> = selisih koordinat GPS HP canvasser vs koordinat outlet terdaftar saat check-in/out. Bukan jarak perjalanan — jarak besar berarti canvasser kemungkinan tidak berada di lokasi outlet.
@@ -1080,7 +1126,7 @@ function Dashboard({files,onReset,dark,toggleDark}){
       }
     };
     const rows = drillKey ? all.filter(ff) : all;
-    return rows.sort((a,b)=>new Date(a["Planned Visit Date"]||0)-new Date(b["Planned Visit Date"]||0));
+    const sorted=rows.sort((a,b)=>new Date(a["Planned Visit Date"]||0)-new Date(b["Planned Visit Date"]||0));sorted._all=all;return sorted;
   },[clusters]);
   const card=(x={})=>({background:t.card,border:`1px solid ${t.border}`,borderRadius:14,padding:20,...x});
   const ths=key=>({padding:"9px 10px",textAlign:"left",fontSize:11,fontWeight:700,color:sk===key?"#60a5fa":t.muted,cursor:"pointer",letterSpacing:"0.05em",whiteSpace:"nowrap",userSelect:"none",borderBottom:`2px solid ${sk===key?P.accent:t.border}`});
@@ -1689,9 +1735,21 @@ function Dashboard({files,onReset,dark,toggleDark}){
                         <td style={{padding:"7px 10px",color:t.muted,fontSize:11,whiteSpace:"nowrap",maxWidth:140,overflow:"hidden",textOverflow:"ellipsis"}}>{c.cluster||"–"}</td>
                         <td style={{padding:"7px 10px",fontWeight:600,whiteSpace:"nowrap"}}>{c.name}</td>
                         <td style={{padding:"7px 10px",fontWeight:700}}>{c.total.toLocaleString()}</td>
-                        <td style={{padding:"7px 10px",color:P.a1}}>{c.A1.toLocaleString()}</td>
-                        <td style={{padding:"7px 10px",color:P.a2}}>{c.A2}</td>
-                        <td style={{padding:"7px 10px",color:P.a3}}>{c.A3}</td>
+                        <td style={{padding:"7px 10px"}}>
+                          {c.A1>0
+                            ?<span onClick={()=>{const rows=getCanvasserRows(c.name,c.cluster,"A1");setCanvDetail({canvasser:c,drillLabel:"A1 - Normal",color:P.a1,rows,drillKey:"A1"});}} style={{color:P.a1,fontWeight:700,cursor:"pointer",borderBottom:"1px dotted "+P.a1}}>{c.A1.toLocaleString()}</span>
+                            :<span style={{color:t.muted}}>0</span>}
+                        </td>
+                        <td style={{padding:"7px 10px"}}>
+                          {c.A2>0
+                            ?<span onClick={()=>{const rows=getCanvasserRows(c.name,c.cluster,"A2");setCanvDetail({canvasser:c,drillLabel:"A2 - Anomaly",color:P.a2,rows,drillKey:"A2"});}} style={{color:P.a2,fontWeight:700,cursor:"pointer",borderBottom:"1px dotted "+P.a2}}>{c.A2.toLocaleString()}</span>
+                            :<span style={{color:t.muted}}>0</span>}
+                        </td>
+                        <td style={{padding:"7px 10px"}}>
+                          {c.A3>0
+                            ?<span onClick={()=>{const rows=getCanvasserRows(c.name,c.cluster,"A3");setCanvDetail({canvasser:c,drillLabel:"A3 - Incomplete",color:P.a3,rows,drillKey:"A3"});}} style={{color:P.a3,fontWeight:700,cursor:"pointer",borderBottom:"1px dotted "+P.a3}}>{c.A3.toLocaleString()}</span>
+                            :<span style={{color:t.muted}}>0</span>}
+                        </td>
                         <td style={{padding:"7px 10px",color:c.INVESTIGATE>0?P.investigate:t.muted,fontWeight:c.INVESTIGATE>0?700:400}}>{c.INVESTIGATE}</td>
                         <td style={{padding:"7px 10px"}}>
                           <div style={{display:"flex",alignItems:"center",gap:4}}>
