@@ -7,6 +7,15 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 const DARK  = { bg:"#060d1a",card:"#0c1a2e",cardAlt:"#081422",border:"#162840",text:"#ddeeff",muted:"#5a7fa8",inputBg:"#0c1a2e",rowAlt:"rgba(255,255,255,0.02)",rowHover:"rgba(37,99,235,0.08)" };
 const LIGHT = { bg:"#f0f4fa",card:"#ffffff",cardAlt:"#f5f8ff",border:"#d0dff0",text:"#0f2040",muted:"#6b8aad",inputBg:"#ffffff",rowAlt:"rgba(0,0,0,0.02)",rowHover:"rgba(37,99,235,0.05)" };
 
+
+// ── DEFAULT VALIDATION PARAMETERS ────────────────────────────────────────────
+const DEFAULT_PARAMS = {
+  dur_short: 5,      // menit — di bawah ini = SHORT
+  dur_long:  30,     // menit — di atas ini = LONG
+  dis_near:  50,     // meter — di bawah ini = NEAR
+  dis_far:   200,    // meter — di atas ini = FAR
+};
+
 const P = {
   a1:"#22c55e",a2:"#f59e0b",a3:"#3b82f6",
   valid:"#22c55e",observe:"#f59e0b",investigate:"#ef4444",incomplete:"#3b82f6",
@@ -30,6 +39,92 @@ const pct  = (n,d) => d ? +((n/d)*100).toFixed(1) : 0;
 const pctS = (n,d) => pct(n,d).toFixed(1)+"%";
 const fmtK = n => n>=1000?(n/1000).toFixed(1)+"K":String(n||0);
 
+
+// ── COMPUTE VALIDATION COLUMNS from raw data ─────────────────────────────────
+function haversineM(lat1,lon1,lat2,lon2){
+  const R=6371000,toR=Math.PI/180;
+  const dLat=(lat2-lat1)*toR, dLon=(lon2-lon1)*toR;
+  const sd=Math.sin(dLat/2),sl=Math.sin(dLon/2);
+  const a=sd*sd+Math.cos(lat1*toR)*Math.cos(lat2*toR)*sl*sl;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function computeValidation(row, params=DEFAULT_PARAMS){
+  const p = {...DEFAULT_PARAMS, ...params};
+  // Already has computed columns? Use them
+  if(row["Visit Status"]&&["VALID","OBSERVE","INVESTIGATE","INCOMPLETE"].includes(String(row["Visit Status"]).toUpperCase()))
+    return row;
+
+  const r = {...row};
+
+  // 1. Visit Duration
+  const tIn  = row["Actual Visit Time"];
+  const tOut = row["Actual Check-Out Time"];
+  const hasIn  = tIn  != null && tIn  !== "";
+  const hasOut = tOut != null && tOut !== "";
+  let durMin = null;
+  if(hasIn && hasOut){
+    const d1=new Date(tIn), d2=new Date(tOut);
+    if(!isNaN(d1)&&!isNaN(d2)) durMin=(d2-d1)/60000;
+  }
+  if(durMin===null && row["Visit Duration (Menit)"]!=null)
+    durMin = parseFloat(row["Visit Duration (Menit)"]);
+  r["Visit Duration (Menit)"] = durMin;
+
+  // 2. Distance Check In/Out (from GPS coords if missing)
+  let distIn  = parseFloat(row["Distance Check In (Meter)"])||null;
+  let distOut = parseFloat(row["Distance Check Out (Meter)"])||null;
+  const roLat = parseFloat(row["RO Latitude"]);
+  const roLon = parseFloat(row["RO Longitude"]);
+  if((distIn===null||isNaN(distIn)) && !isNaN(roLat)&&!isNaN(roLon)){
+    const ciLat=parseFloat(row["Check-In Latitude"]), ciLon=parseFloat(row["Check-In Longitude"]);
+    if(!isNaN(ciLat)&&!isNaN(ciLon)) distIn=haversineM(ciLat,ciLon,roLat,roLon);
+  }
+  if((distOut===null||isNaN(distOut)) && !isNaN(roLat)&&!isNaN(roLon)){
+    const coLat=parseFloat(row["Check-Out Latitude"]), coLon=parseFloat(row["Check-Out Longitude"]);
+    if(!isNaN(coLat)&&!isNaN(coLon)) distOut=haversineM(coLat,coLon,roLat,roLon);
+  }
+  r["Distance Check In (Meter)"]  = distIn  ?? row["Distance Check In (Meter)"];
+  r["Distance Check Out (Meter)"] = distOut ?? row["Distance Check Out (Meter)"];
+
+  // 3. Duration Status
+  const durSt = !hasIn||!hasOut?"INCOMPLETE"
+    : durMin<p.dur_short?"SHORT"
+    : durMin>p.dur_long?"LONG"
+    : "NORMAL";
+  r["Duration Status"] = durSt;
+  r["_DUR"] = durSt;
+
+  // 4. Distance Status & Location Status
+  const maxDist = Math.max(distIn||0, distOut||0);
+  const disSt = !hasIn||!hasOut?"INCOMPLETE"
+    : maxDist<=p.dis_near?"NEAR"
+    : maxDist<=p.dis_far?"MID"
+    : "FAR";
+  const locSt = !hasIn||!hasOut?"INCOMPLETE"
+    : disSt==="NEAR"?"MATCH":"NOT MATCH";
+  r["Distance Status"]  = disSt;
+  r["Location Status"]  = locSt;
+  r["_DIS"] = disSt;
+  r["_LOC"] = locSt;
+
+  // 5. Visit Status
+  const vs = !hasIn||!hasOut?"INCOMPLETE"
+    : durSt==="SHORT"&&(disSt==="MID"||disSt==="FAR")&&locSt==="NOT MATCH"?"INVESTIGATE"
+    : durSt==="NORMAL"&&disSt==="NEAR"&&locSt==="MATCH"?"VALID"
+    : "OBSERVE";
+  r["Visit Status"] = vs;
+  r["_VS"] = vs;
+
+  // 6. Activity Status
+  const as1 = vs==="VALID"?"A1 - NORMAL"
+    : vs==="INCOMPLETE"?"A3 - INCOMPLETE"
+    : "A2 - ANOMALY";
+  r["Activity Status"] = as1;
+
+  return r;
+}
+
 function extractDate(val) {
   if(!val) return null;
   if(typeof val==="number"){ const d=new Date(Math.round((val-25569)*86400*1000)); return d.toISOString().slice(0,10); }
@@ -41,10 +136,11 @@ function getRegionCode(cl) {
 }
 
 // ── READ FILE — reads critical cols by direct cell reference (100% reliable) ─────
-function readFileRows(buf) {
+function readFileRows(buf, sheetName=null) {
   const wb = XLSX.read(buf, {type:"array", cellDates:true});
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  if(!ws["!ref"]) throw new Error("Sheet kosong");
+  const targetSheet = sheetName||wb.SheetNames[0];
+  const ws = wb.Sheets[targetSheet];
+  if(!ws||!ws["!ref"]) throw new Error("Sheet kosong: "+targetSheet);
 
   const range = XLSX.utils.decode_range(ws["!ref"]);
 
@@ -109,7 +205,9 @@ function readFileRows(buf) {
   });
 
   if(!rows.length) throw new Error("File kosong");
-  return {rows};
+  // Apply validation computation for raw data (without green columns)
+  const processedRows = rows.map(r => computeValidation(r));
+  return {rows: processedRows};
 }
 
 
@@ -781,7 +879,7 @@ function CanvasserDetailPanel({detail,onClose,t}){
 // ─────────────────────────────────────────────────────────────────────────────
 // UPLOAD SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
-function UploadScreen({onLoad,t}){
+function UploadScreen({onLoad,roMap,onRoLoad,t}){
   const [drag,setDrag]=useState(false);
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState(null);
@@ -789,7 +887,34 @@ function UploadScreen({onLoad,t}){
   const fileRef=useRef();
   const folderRef=useRef();
 
-  const handleFiles=useCallback(async files=>{
+  const handleRoFile=async(fileList)=>{
+    if(!fileList||!fileList.length) return;
+    try{
+      const maps=await Promise.all(Array.from(fileList).map(async file=>{
+        const buf=await file.arrayBuffer();
+        const wb=XLSX.read(buf,{type:"array"});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{defval:null});
+        const map={};
+        rows.forEach(r=>{
+          const id=String(r["Outlet ID"]||"").trim(); if(!id) return;
+          map[id]={
+            lat:parseFloat(r["Latitude"])||null,
+            lon:parseFloat(r["Longitude"])||null,
+            census:String(r["From RO Census"]||"").toUpperCase()==="YES",
+            type:String(r["Outlet Type"]||"").trim(),
+            cluster:String(r["Sales Cluster"]||"").trim(),
+            name:String(r["Outlet Name"]||"").trim(),
+          };
+        });
+        return map;
+      }));
+      const merged=Object.assign({},...maps);
+      onRoLoad(prev=>({...prev,...merged}));
+    }catch(e){console.error("RO parse error:",e);}
+  };
+
+    const handleFiles=useCallback(async files=>{
     setLoading(true);setError(null);
     try{
       const xlsFiles=Array.from(files).filter(f=>/\.(xlsx|xls)$/i.test(f.name));
@@ -798,13 +923,20 @@ function UploadScreen({onLoad,t}){
         const reader=new FileReader();
         reader.onload=e=>{
           try{
-            const {rows}=readFileRows(e.target.result);
-            if(!rows.length)throw new Error(`${f.name}: tidak ada data`);
-            if(!rows.length)throw new Error(`${f.name}: file kosong`);
-            const clusterNames=[...new Set(rows.map(r=>r["Cluster"]).filter(Boolean))];
-            const label=clusterNames.length===1?clusterNames[0]:f.name.replace(/\.[^.]+$/,"");
-            const regionCode=getRegionCode(clusterNames[0]||"");
-            res({name:f.name,label,regionCode,rows});
+            const wb2=XLSX.read(e.target.result,{type:"array",cellDates:true});
+            const sheets=wb2.SheetNames;
+            const fileResults=[];
+            for(const sn of sheets){
+              const ws2=wb2.Sheets[sn]; if(!ws2||!ws2["!ref"]) continue;
+              const {rows}=readFileRows(e.target.result,sn);
+              if(!rows||!rows.length) continue;
+              const clusterNames=[...new Set(rows.map(r=>r["Cluster"]).filter(Boolean))];
+              const label=clusterNames.length===1?clusterNames[0]:(sheets.length>1?sn:f.name.replace(/\.[^.]+$/,""));
+              const regionCode=getRegionCode(clusterNames[0]||sn||"");
+              fileResults.push({name:sheets.length>1?f.name+"|"+sn:f.name,label,regionCode,rows});
+            }
+            if(!fileResults.length) throw new Error(`${f.name}: tidak ada data`);
+            res(fileResults.length===1?fileResults[0]:{multi:true,results:fileResults,name:f.name});
           }catch(err){rej(err);}
         };
         reader.readAsArrayBuffer(f);
@@ -812,7 +944,8 @@ function UploadScreen({onLoad,t}){
       setQueue(prev=>{
         const m=[...prev];
         const skipped=[];
-        results.forEach(r=>{
+        const flatResults=results.flatMap(r=>r.multi?r.results:[r]);
+        flatResults.forEach(r=>{
           const byName=m.findIndex(x=>x.name===r.name);
           const byLabel=m.findIndex(x=>x.label===r.label&&x.name!==r.name);
           if(byName>=0){
@@ -869,6 +1002,33 @@ function UploadScreen({onLoad,t}){
           </>}
       </div>
 
+      {/* RO Master Data Upload */}
+      <div style={{width:"100%",maxWidth:520,marginTop:14,padding:"12px 16px",background:t.card,borderRadius:12,border:`1px solid ${Object.keys(roMap).length>0?"#22c55e":t.border}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+          <span>🏪</span>
+          <span style={{fontWeight:700,fontSize:12,color:t.text}}>Master Data Outlet (RO)</span>
+          {Object.keys(roMap).length>0&&<span style={{background:"#22c55e20",color:"#22c55e",padding:"1px 8px",borderRadius:999,fontSize:10,fontWeight:700}}>✓ {Object.keys(roMap).length} outlet loaded</span>}
+          <span style={{marginLeft:"auto",fontSize:10,color:t.muted}}>Opsional</span>
+        </div>
+        <div style={{fontSize:10,color:t.muted,marginBottom:8}}>Upload RO.xlsx → hitung jarak GPS & status Census otomatis</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <label style={{display:"inline-flex",alignItems:"center",gap:6,background:Object.keys(roMap).length>0?"#22c55e22":t.cardAlt,color:Object.keys(roMap).length>0?"#22c55e":t.muted,borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:11,fontWeight:700,border:`1px solid ${Object.keys(roMap).length>0?"#22c55e":t.border}`}}>
+            📂 {Object.keys(roMap).length>0?"✓ Tambah / Ganti RO":"Upload File RO"}
+            <input type="file" accept=".xlsx,.xls" multiple style={{display:"none"}} onClick={e=>e.target.value=""} onChange={e=>handleRoFile(e.target.files)}/>
+          </label>
+          {Object.keys(roMap).length>0&&(
+            <button onClick={()=>onRoLoad({})} style={{background:"#ef444422",color:"#ef4444",border:"1px solid #ef444440",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700}}>
+              🗑 Clear RO
+            </button>
+          )}
+        </div>
+        {Object.keys(roMap).length>0&&(
+          <div style={{fontSize:10,color:t.muted,marginTop:6}}>
+            Upload file RO tambahan akan <b style={{color:t.text}}>merge</b> — Outlet ID sama akan di-overwrite dengan data terbaru
+          </div>
+        )}
+      </div>
+
       {error&&<div style={{marginTop:12,background:error.startsWith("⚠️")?"rgba(245,158,11,0.1)":"rgba(239,68,68,0.1)",border:`1px solid ${error.startsWith("⚠️")?"#f59e0b":"#ef4444"}`,borderRadius:10,padding:"10px 18px",color:error.startsWith("⚠️")?"#fbbf24":"#f87171",fontSize:12,maxWidth:520}}>{error}</div>}
 
       {queue.length>0&&(
@@ -907,8 +1067,10 @@ function UploadScreen({onLoad,t}){
 // ─────────────────────────────────────────────────────────────────────────────
 // DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
-function Dashboard({files,onReset,dark,toggleDark}){
+function Dashboard({files,onReset,dark,toggleDark,roMap={}}){
   const t=dark?DARK:LIGHT;
+  const [params,setParams]=useState({...DEFAULT_PARAMS});
+  const [showParams,setShowParams]=useState(false);
   const [selRegion,setSelRegion]=useState(null);
   const [selCluster,setSelCluster]=useState(null);
   const [tab,setTab]=useState("overview");
@@ -935,12 +1097,27 @@ function Dashboard({files,onReset,dark,toggleDark}){
   const [fq,setFq]=useState("all");
 
   // ── Clusters (each file = one cluster) ───────────────────────────────────
-  const clusters=useMemo(()=>files.map((f,i)=>({
-    ...processRows(f.rows),
-    rawRows:f.rows,  // kept for canvasser detail lookup
+  const clusters=useMemo(()=>files.map((f,i)=>{
+    // Re-apply validation with current params (supports param changes)
+    const reRows=f.rows.map(r=>{
+      // Enrich with RO master data if available
+      const rid=String(r["Outlet ID"]||"").trim();
+      const ro=roMap[rid];
+      const enriched=ro?{
+        ...r,
+        "RO Latitude":  r["RO Latitude"]  ?? ro.lat,
+        "RO Longitude": r["RO Longitude"] ?? ro.lon,
+        "RO Census":    r["RO Census"]    ?? (ro.census?"YES":"NO"),
+        "Outlet Type":  r["Outlet Type"]  || ro.type,
+      }:r;
+      return computeValidation(enriched,params);
+    });
+    return {
+    ...processRows(reRows),
+    rawRows:reRows,  // kept for canvasser detail lookup
     label:f.label,regionCode:f.regionCode,
     color:P.regions[i%P.regions.length],fileName:f.name,
-  })),[files]);
+  };}),[files,params]);
 
   // ── Group clusters by region ─────────────────────────────────────────────
   const regionGroups=useMemo(()=>{
@@ -1167,6 +1344,7 @@ function Dashboard({files,onReset,dark,toggleDark}){
           <div style={{fontSize:11,color:t.muted,background:t.cardAlt,border:`1px solid ${t.border}`,borderRadius:8,padding:"5px 10px"}}>
             {clusters.length} cluster · {regionCodes.length} region · {(national.total||0).toLocaleString()} aktivitas
           </div>
+          <button onClick={()=>setShowParams(p=>!p)} style={{background:showParams?"#f59e0b22":t.cardAlt,border:"1px solid "+(showParams?"#f59e0b":t.border),color:showParams?"#f59e0b":t.muted,borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:700,marginRight:4}}>⚙️ Parameter</button>
           <button onClick={toggleDark} style={{background:t.cardAlt,border:`1px solid ${t.border}`,color:t.text,borderRadius:8,padding:"5px 12px",fontSize:13,cursor:"pointer",fontWeight:700}}>
             {dark?"☀️":"🌙"}
           </button>
@@ -1309,15 +1487,20 @@ function Dashboard({files,onReset,dark,toggleDark}){
                   const wA3=[...view.canvassers].filter(c=>c.A3>0).sort((a,b)=>b.A3-a.A3)[0];
                   const wInv=[...view.canvassers].filter(c=>c.INVESTIGATE>0).sort((a,b)=>b.INVESTIGATE-a.INVESTIGATE)[0];
                   const topDay=[...(view.trend||[])].sort((a,b)=>b.total-a.total)[0];
+                  const openInsight=(canv,key,label,color)=>{
+                    if(!canv) return;
+                    const rows=getCanvasserRows(canv.name,canv.cluster,key);
+                    setCanvDetail({canvasser:canv,drillLabel:label,color,rows,drillKey:key});
+                  };
                   return[
                     {icon:"✅",color:P.a1,title:"A1 Normal Rate",desc:`${pctS(ac["A1 - NORMAL"],T)} (${(ac["A1 - NORMAL"]||0).toLocaleString()}) aktivitas berjalan normal.`},
-                    {icon:"⚠️",color:P.a2,title:"A2 Anomaly Terbanyak",desc:wA2?`${wA2.name} [${wA2.cluster}]: ${wA2.A2.toLocaleString()} aktivitas (${wA2.a2p.toFixed(1)}% dari totalnya)`:"–"},
-                    {icon:"🔵",color:P.a3,title:"A3 Incomplete Terbanyak",desc:wA3?`${wA3.name} [${wA3.cluster}]: ${wA3.A3.toLocaleString()} aktivitas (${wA3.a3p.toFixed(1)}% dari totalnya)`:"–"},
-                    {icon:"🔍",color:P.investigate,title:"Investigate Terbanyak",desc:wInv?`${wInv.name} [${wInv.cluster}]: ${wInv.INVESTIGATE.toLocaleString()} aktivitas (${wInv.invP.toFixed(1)}% dari totalnya)`:"–"},
+                    {icon:"⚠️",color:P.a2,title:"A2 Anomaly Terbanyak",onClick:wA2?()=>openInsight(wA2,"A2","A2 - Anomaly",P.a2):null,desc:wA2?`${wA2.name} [${wA2.cluster}]: ${wA2.A2.toLocaleString()} aktivitas (${wA2.a2p.toFixed(1)}% dari totalnya)`:"–"},
+                    {icon:"🔵",color:P.a3,title:"A3 Incomplete Terbanyak",onClick:wA3?()=>openInsight(wA3,"A3","A3 - Incomplete",P.a3):null,desc:wA3?`${wA3.name} [${wA3.cluster}]: ${wA3.A3.toLocaleString()} aktivitas (${wA3.a3p.toFixed(1)}% dari totalnya)`:"–"},
+                    {icon:"🔍",color:P.investigate,title:"Investigate Terbanyak",onClick:wInv?()=>openInsight(wInv,"INVESTIGATE","Investigate",P.investigate):null,desc:wInv?`${wInv.name} [${wInv.cluster}]: ${wInv.INVESTIGATE.toLocaleString()} aktivitas (${wInv.invP.toFixed(1)}% dari totalnya)`:"–"},
                     {icon:"⏱",color:"#f97316",title:"Durasi Singkat (SHORT)",desc:`${(dc["SHORT"]||0).toLocaleString()} aktivitas durasi singkat — perlu verifikasi.`},
-                    {icon:"📅",color:"#34d399",title:"Hari Tersibuk",desc:topDay?`${topDay.date}: ${topDay.total.toLocaleString()} aktivitas (A1: ${pctS(topDay.A1,topDay.total)})`:"–"},
+                    {icon:"📅",color:"#34d399",title:"Hari Tersibuk",onClick:topDay?()=>setTrendDrill(topDay.date):null,desc:topDay?`${topDay.date}: ${topDay.total.toLocaleString()} aktivitas (A1: ${pctS(topDay.A1,topDay.total)})`:"–"},
                   ].map((f,i)=>(
-                    <div key={i} style={{display:"flex",gap:10,padding:"9px 12px",borderRadius:10,background:t.cardAlt,border:`1px solid ${t.border}`,marginBottom:8,alignItems:"flex-start"}}>
+                    <div key={i} onClick={f.onClick} style={{display:"flex",gap:10,padding:"9px 12px",cursor:f.onClick?"pointer":"default",transition:"background 0.15s",background:f.onClick?"transparent":"transparent",borderRadius:10,background:t.cardAlt,border:`1px solid ${t.border}`,marginBottom:8,alignItems:"flex-start"}}>
                       <div style={{fontSize:14,width:28,height:28,borderRadius:7,background:f.color+"20",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{f.icon}</div>
                       <div>
                         <div style={{fontWeight:700,fontSize:11,color:f.color}}>{f.title}</div>
@@ -1832,6 +2015,37 @@ function Dashboard({files,onReset,dark,toggleDark}){
         </div>
       </div>
     )}
+
+    {showParams&&(
+      <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.7)",backdropFilter:"blur(4px)"}} onClick={()=>setShowParams(false)}>
+        <div onClick={e=>e.stopPropagation()} style={{background:t.card,borderRadius:16,border:`1px solid ${t.border}`,padding:"24px 28px",minWidth:320,maxWidth:420,boxShadow:"0 8px 40px rgba(0,0,0,0.5)",fontFamily:"'Segoe UI',system-ui,sans-serif"}}>
+          <div style={{fontWeight:800,fontSize:16,color:t.text,marginBottom:4}}>⚙️ Parameter Validasi</div>
+          <div style={{fontSize:11,color:t.muted,marginBottom:20}}>Perubahan parameter memerlukan persetujuan management</div>
+          {[
+            {key:"dur_short",label:"Durasi Minimal (menit)",desc:"Kunjungan di bawah ini = SHORT",unit:"menit"},
+            {key:"dur_long", label:"Durasi Maksimal (menit)",desc:"Kunjungan di atas ini = LONG",unit:"menit"},
+            {key:"dis_near", label:"Jarak NEAR (meter)",desc:"Jarak di bawah ini = NEAR (normal)",unit:"meter"},
+            {key:"dis_far",  label:"Jarak FAR (meter)",desc:"Jarak di atas ini = FAR (anomali)",unit:"meter"},
+          ].map(({key,label,desc,unit})=>(
+            <div key={key} style={{marginBottom:16}}>
+              <div style={{fontWeight:700,fontSize:12,color:t.text,marginBottom:2}}>{label}</div>
+              <div style={{fontSize:10,color:t.muted,marginBottom:6}}>{desc}</div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <input type="number" value={params[key]} min={0} step={key.startsWith("dur")?1:10}
+                  onChange={e=>setParams(p=>({...p,[key]:parseFloat(e.target.value)||0}))}
+                  style={{width:80,background:t.cardAlt,border:`1px solid ${t.border}`,color:t.text,borderRadius:8,padding:"6px 10px",fontSize:13,fontWeight:700,outline:"none"}}/>
+                <span style={{fontSize:11,color:t.muted}}>{unit}</span>
+                <span style={{fontSize:10,color:t.muted,marginLeft:4}}>Default: {DEFAULT_PARAMS[key]} {unit}</span>
+              </div>
+            </div>
+          ))}
+          <div style={{display:"flex",gap:8,marginTop:8}}>
+            <button onClick={()=>setParams({...DEFAULT_PARAMS})} style={{flex:1,background:t.cardAlt,border:`1px solid ${t.border}`,color:t.muted,borderRadius:8,padding:"8px",cursor:"pointer",fontSize:12,fontWeight:700}}>↺ Reset Default</button>
+            <button onClick={()=>setShowParams(false)} style={{flex:1,background:P.accent,border:"none",color:"#fff",borderRadius:8,padding:"8px",cursor:"pointer",fontSize:12,fontWeight:700}}>✓ Simpan</button>
+          </div>
+        </div>
+      </div>
+    )}
     <OutletActivityPanel detail={outletActivity} onClose={()=>setOutletActivity(null)} t={t}/>
     <DrillDownPanel drill={drill} onClose={()=>setDrill(null)} t={t}
       onCanvasserClick={(r)=>{
@@ -1846,9 +2060,10 @@ function Dashboard({files,onReset,dark,toggleDark}){
 // ── ROOT ──────────────────────────────────────────────────────────────────────
 export default function App(){
   const [files,setFiles]=useState(null);
+  const [roMap,setRoMap]=useState({});
   const [dark,setDark]=useState(true);
   const t=dark?DARK:LIGHT;
   return files
-    ?<Dashboard files={files} onReset={()=>setFiles(null)} dark={dark} toggleDark={()=>setDark(d=>!d)}/>
-    :<UploadScreen onLoad={setFiles} t={t}/>;
+    ?<Dashboard files={files} onReset={()=>setFiles(null)} dark={dark} toggleDark={()=>setDark(d=>!d)} roMap={roMap}/>
+    :<UploadScreen onLoad={setFiles} roMap={roMap} onRoLoad={setRoMap} t={t}/>;
 }
