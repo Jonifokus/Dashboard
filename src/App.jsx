@@ -223,6 +223,9 @@ function processRows(rows) {
   const outMap={},canvMap={},dateMap={},visitMap={};
 
   rows.forEach(r=>{
+    // ── Filter: hanya proses Regular Visit ─────────────────────────────────
+    const actType=String(r["Activity Type"]||"").trim().toLowerCase();
+    if(actType && actType!=="regular visit") return; // skip Ad-Hoc & lainnya
     // Use directly-read cell values (_VS, _AS1 etc.) — bypasses SheetJS duplicate key issues
     // _VS = Visit Status cell value (direct cell read, always correct)
     // _AS1 = last "Activity Status" col = A1/A2/A3 (fallback)
