@@ -1102,7 +1102,12 @@ function Dashboard({files,onReset,dark,toggleDark,roMap={}}){
   // ── Clusters (each file = one cluster) ───────────────────────────────────
   const clusters=useMemo(()=>files.map((f,i)=>{
     // Re-apply validation with current params (supports param changes)
-    const reRows=f.rows.map(r=>{
+    // Filter hanya Regular Visit SEBELUM disimpan ke rawRows
+    const regularRows=f.rows.filter(r=>{
+      const at=String(r["Activity Type"]||"").trim().toLowerCase();
+      return !at||at==="regular visit";
+    });
+    const reRows=regularRows.map(r=>{
       // Enrich with RO master data if available
       const rid=String(r["Outlet ID"]||"").trim();
       const ro=roMap[rid];
