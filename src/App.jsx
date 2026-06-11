@@ -205,8 +205,13 @@ function readFileRows(buf, sheetName=null) {
   });
 
   if(!rows.length) throw new Error("File kosong");
-  // Apply validation computation for raw data (without green columns)
-  const processedRows = rows.map(r => computeValidation(r));
+  // Filter: hanya Regular Visit yang masuk ke dashboard
+  const regularOnly = rows.filter(r=>{
+    const at = String(r["Activity Type"]||"").trim().toLowerCase();
+    return !at || at === "regular visit";
+  });
+  // Apply validation computation
+  const processedRows = regularOnly.map(r => computeValidation(r));
   return {rows: processedRows};
 }
 
@@ -223,9 +228,7 @@ function processRows(rows) {
   const outMap={},canvMap={},dateMap={},visitMap={};
 
   rows.forEach(r=>{
-    // ── Filter: hanya proses Regular Visit ─────────────────────────────────
-    const actType=String(r["Activity Type"]||"").trim().toLowerCase();
-    if(actType && actType!=="regular visit") return; // skip Ad-Hoc & lainnya
+    // Regular Visit filter applied upstream in readFileRows
     // Use directly-read cell values (_VS, _AS1 etc.) — bypasses SheetJS duplicate key issues
     // _VS = Visit Status cell value (direct cell read, always correct)
     // _AS1 = last "Activity Status" col = A1/A2/A3 (fallback)
@@ -1102,12 +1105,7 @@ function Dashboard({files,onReset,dark,toggleDark,roMap={}}){
   // ── Clusters (each file = one cluster) ───────────────────────────────────
   const clusters=useMemo(()=>files.map((f,i)=>{
     // Re-apply validation with current params (supports param changes)
-    // Filter hanya Regular Visit SEBELUM disimpan ke rawRows
-    const regularRows=f.rows.filter(r=>{
-      const at=String(r["Activity Type"]||"").trim().toLowerCase();
-      return !at||at==="regular visit";
-    });
-    const reRows=regularRows.map(r=>{
+    const reRows=f.rows.map(r=>{
       // Enrich with RO master data if available
       const rid=String(r["Outlet ID"]||"").trim();
       const ro=roMap[rid];
