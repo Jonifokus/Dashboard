@@ -463,7 +463,7 @@ function Pagination({page,setPage,total,pageSize,t}){
       </div>
     </div>
   );
-}
+
 
 // ── VISIT TYPE DRILL PANEL ───────────────────────────────────────────────────
 function VisitTypeDrillPanel({drill,onClose,t,onCanvasserClick}){
